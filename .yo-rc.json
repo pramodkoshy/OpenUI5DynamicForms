@@ -1,0 +1,18 @@
+{
+  "generator-ui5-app": {
+    "namespace": "com.supabase.easyui5",
+    "framework": "OpenUI5",
+    "frameworkVersion": "1.133.0",
+    "author": "Pramod Koshy",
+    "initrepo": true,
+    "appId": "com.supabase.easyui5",
+    "appURI": "com/supabase/easyui5",
+    "cdnDomain": "sdk.openui5.org",
+    "defaultTheme": "sap_horizon",
+    "qunitCoverageFile": "qunit-coverage-istanbul.js",
+    "gte1_98_0": true,
+    "gte1_104_0": true,
+    "lt1_124_0": false,
+    "setupCompleted": true
+  }
+}

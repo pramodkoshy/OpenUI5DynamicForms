@@ -121,7 +121,7 @@
                                 columnsXL="2"
                                 columnsL="2"
                                 columnsM="2"
-                         
+                                
                                 singleContainerFullSize="false">
                                 <form:content>
                                     <!-- Form content will be added dynamically by the controller -->
@@ -179,7 +179,7 @@
             <!-- Additional Information Section -->
             <uxap:ObjectPageSection title="Additional Information">
                 <uxap:subSections>
-                    <uxap:ObjectPageSubSection title="Notes & Attachments">
+                    <uxap:ObjectPageSubSection title="Notes &amp; Attachments">
                         <uxap:blocks>
                             <VBox>
                                 <Panel headerText="Notes">

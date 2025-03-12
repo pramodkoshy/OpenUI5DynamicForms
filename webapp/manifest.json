@@ -1,81 +1,136 @@
 {
-	"_version": "1.12.0",
-
-	"sap.app": {
-		"id": "com.supabase.easyui5",
-		"type": "application",
-		"i18n": "i18n/i18n.properties",
-		"title": "{{appTitle}}",
-		"description": "{{appDescription}}",
-		"applicationVersion": {
-			"version": "${version}"
-		}
-	},
-
-	"sap.ui": {
-		"technology": "UI5",
-		"icons": {},
-		"deviceTypes": {
-			"desktop": true,
-			"tablet": true,
-			"phone": true
-		}
-	},
-
-	"sap.ui5": {
-		"rootView": {
-			"viewName": "com.supabase.easyui5.view.App",
-			"type": "XML",
-			"async": true,
-			"id": "app"
-		},
-
-		"dependencies": {
-			"minUI5Version": "1.133.0",
-			"libs": {
-				"sap.ui.core": {},
-				"sap.m": {}
-			}
-		},
-
-		"handleValidation": true,
-
-		"contentDensities": {
-			"compact": true,
-			"cozy": true
-		},
-
-		"models": {
-			"i18n": {
-				"type": "sap.ui.model.resource.ResourceModel",
-				"settings": {
-					"bundleName": "com.supabase.easyui5.i18n.i18n"
-				}
-			}
-		},
-
-		"routing": {
-			"config": {
-				"routerClass": "sap.m.routing.Router",
-				"viewType": "XML",
-				"viewPath": "com.supabase.easyui5.view",
-				"controlId": "app",
-				"controlAggregation": "pages",
-				"async": true
-			},
-			"routes": [
-				{
-					"pattern": "",
-					"name": "main",
-					"target": "main"
-				}
-			],
-			"targets": {
-				"main": {
-					"viewId": "main",
-					"viewName": "Main"
-				}
-			}
-		}
-	}
+    "_version": "1.48.0",
+    "sap.app": {
+        "id": "com.supabase.easyui5",
+        "type": "application",
+        "applicationVersion": {
+            "version": "0.0.1"
+        },
+        "title": "Supabase UI5 Application",
+        "description": "UI5 application connected to Supabase",
+        "i18n": {
+            "bundleUrl": "i18n/i18n.properties",
+            "supportedLocales": ["en", "de"],
+            "fallbackLocale": "en"
+        }
+    },
+    "sap.ui": {
+        "technology": "UI5",
+        "icons": {
+            "icon": "",
+            "favIcon": "",
+            "phone": "",
+            "phone@2": "",
+            "tablet": "",
+            "tablet@2": ""
+        },
+        "deviceTypes": {
+            "desktop": true,
+            "tablet": true,
+            "phone": true
+        }
+    },
+    "sap.ui5": {
+        "flexEnabled": false,
+        "rootView": {
+            "viewName": "com.supabase.easyui5.view.App",
+            "type": "XML",
+            "async": true,
+            "id": "app"
+        },
+        "dependencies": {
+            "minUI5Version": "1.108.0",
+            "libs": {
+                "sap.ui.core": {},
+                "sap.m": {},
+                "sap.ui.layout": {},
+                "sap.f": {}
+            }
+        },
+        "contentDensities": {
+            "compact": true,
+            "cozy": true
+        },
+        "models": {
+            "i18n": {
+                "type": "sap.ui.model.resource.ResourceModel",
+                "settings": {
+                    "bundleName": "com.supabase.easyui5.i18n.i18n",
+                    "supportedLocales": ["en", "de"],
+                    "fallbackLocale": "en"
+                }
+            }
+        },
+        "resources": {
+            "css": []
+        },
+        "routing": {
+            "config": {
+                "routerClass": "sap.m.routing.Router",
+                "viewType": "XML",
+                "viewPath": "com.supabase.easyui5.view",
+                "controlId": "app",
+                "controlAggregation": "pages",
+                "transition": "slide",
+                "bypassed": {
+                    "target": "notFound"
+                },
+                "async": true
+            },
+            "routes": [
+                {
+                    "pattern": "",
+                    "name": "home",
+                    "target": "home"
+                },
+                {
+                    "pattern": "entity/{table}",
+                    "name": "entityList",
+                    "target": "entityList"
+                },
+                {
+                    "pattern": "entity/{table}/detail/{id}",
+                    "name": "entityDetail",
+                    "target": "entityDetail"
+                },
+                {
+                    "pattern": "entity/{table}/create",
+                    "name": "entityCreate",
+                    "target": "entityCreate"
+                }
+            ],
+            "targets": {
+                "home": {
+                    "viewId": "home",
+                    "viewName": "Home",
+                    "viewLevel": 0,
+                    "transition": "slide"
+                },
+                "entityList": {
+                    "viewId": "entityList",
+                    "viewName": "EntityList",
+                    "viewLevel": 1,
+                    "transition": "slide"
+                },
+                "entityDetail": {
+                    "viewId": "entityDetail",
+                    "viewName": "EntityDetail",
+                    "viewLevel": 2,
+                    "transition": "slide"
+                },
+                "entityCreate": {
+                    "viewId": "entityCreate",
+                    "viewName": "EntityCreate",
+                    "viewLevel": 2,
+                    "transition": "slide"
+                },
+                "notFound": {
+                    "viewId": "notFound",
+                    "viewName": "NotFound",
+                    "viewLevel": 1,
+                    "transition": "slide"
+                }
+            }
+        }
+    }
 }

@@ -1,0 +1,210 @@
+<mvc:View
+    controllerName="com.supabase.easyui5.controller.EntityDetail"
+    xmlns:mvc="sap.ui.core.mvc"
+    xmlns="sap.m"
+    xmlns:core="sap.ui.core"
+    xmlns:layout="sap.ui.layout"
+    xmlns:form="sap.ui.layout.form"
+    xmlns:f="sap.f"
+    xmlns:uxap="sap.uxap"
+    displayBlock="true">
+
+    <uxap:ObjectPageLayout
+        id="ObjectPageLayout"
+        showTitleInHeaderContent="true"
+        alwaysShowContentHeader="true"
+        showEditHeaderButton="true"
+        editHeaderButtonPress=".onEditPress"
+        upperCaseAnchorBar="false">
+        
+        <!-- Header Title -->
+        <uxap:headerTitle>
+            <uxap:ObjectPageDynamicHeaderTitle>
+                <uxap:heading>
+                    <Title text="{viewModel>/entityTitle}" wrapping="true" />
+                </uxap:heading>
+                <uxap:snappedContent>
+                    <Text text="{viewModel>/entitySubtitle}" />
+                </uxap:snappedContent>
+                <uxap:expandedContent>
+                    <Text text="{viewModel>/entitySubtitle}" />
+                </uxap:expandedContent>
+                
+                <uxap:actions>
+                    <Button 
+                        type="Emphasized" 
+                        text="Edit" 
+                        icon="sap-icon://edit" 
+                        press=".onEditPress" 
+                        visible="{= !${viewModel>/editMode} }"/>
+                    <Button 
+                        type="Accept" 
+                        text="Save" 
+                        icon="sap-icon://save" 
+                        press=".onSavePress" 
+                        visible="{viewModel>/editMode}"/>
+                    <Button 
+                        type="Reject" 
+                        text="Cancel" 
+                        icon="sap-icon://cancel" 
+                        press=".onCancelPress" 
+                        visible="{viewModel>/editMode}"/>
+                    <Button 
+                        type="Reject" 
+                        text="Delete" 
+                        icon="sap-icon://delete" 
+                        press=".onDeletePress"
+                        visible="{= !${viewModel>/editMode} }"/>
+                </uxap:actions>
+                
+                <uxap:navigationActions>
+                    <Button 
+                        type="Transparent" 
+                        icon="sap-icon://nav-back" 
+                        press=".onNavBack"/>
+                </uxap:navigationActions>
+            </uxap:ObjectPageDynamicHeaderTitle>
+        </uxap:headerTitle>
+
+        <!-- Header Content -->
+        <uxap:headerContent>
+            <FlexBox alignItems="Start" justifyContent="SpaceBetween" wrap="Wrap">
+                <layout:VerticalLayout class="sapUiSmallMarginEnd">
+                    <ObjectAttribute 
+                        title="ID" 
+                        text="{viewModel>/entityId}"/>
+                    <ObjectAttribute 
+                        title="Table" 
+                        text="{viewModel>/tableName}"/>
+                </layout:VerticalLayout>
+                
+                <layout:VerticalLayout class="sapUiSmallMarginEnd">
+                    <ObjectAttribute 
+                        title="Created" 
+                        text="{path: 'viewModel>/entity/created_at', formatter: '.formatter.formatDate'}"/>
+                    <ObjectAttribute 
+                        title="Last Updated" 
+                        text="{path: 'viewModel>/entity/updated_at', formatter: '.formatter.formatDate'}"/>
+                </layout:VerticalLayout>
+                
+                <layout:VerticalLayout>
+                    <ObjectStatus
+                        text="{= ${viewModel>/editMode} ? 'Edit Mode' : 'View Mode' }"
+                        state="{= ${viewModel>/editMode} ? 'Warning' : 'None' }"/>
+                    <ObjectAttribute 
+                        title="Related Items" 
+                        text="{viewModel>/relatedItems/length}"/>
+                </layout:VerticalLayout>
+            </FlexBox>
+        </uxap:headerContent>
+
+        <!-- Sections -->
+        <uxap:sections>
+            <!-- Entity Details Section -->
+            <uxap:ObjectPageSection title="Details">
+                <uxap:subSections>
+                    <uxap:ObjectPageSubSection title="Entity Information">
+                        <uxap:blocks>
+                            <form:SimpleForm
+                                id="entityDetailsForm"
+                                editable="true"
+                                layout="ResponsiveGridLayout"
+                                labelSpanXL="4"
+                                labelSpanL="4"
+                                labelSpanM="4"
+                                labelSpanS="12"
+                                adjustLabelSpan="false"
+                                emptySpanXL="0"
+                                emptySpanL="0"
+                                emptySpanM="0"
+                                emptySpanS="0"
+                                columnsXL="2"
+                                columnsL="2"
+                                columnsM="2"
+                         
+                                singleContainerFullSize="false">
+                                <form:content>
+                                    <!-- Form content will be added dynamically by the controller -->
+                                </form:content>
+                            </form:SimpleForm>
+                        </uxap:blocks>
+                    </uxap:ObjectPageSubSection>
+                </uxap:subSections>
+            </uxap:ObjectPageSection>
+
+            <!-- Related Items Section -->
+            <uxap:ObjectPageSection title="Related Items" visible="{= ${viewModel>/relatedItems/length} > 0 }">
+                <uxap:subSections>
+                    <uxap:ObjectPageSubSection id="relatedItemsSection">
+                        <uxap:blocks>
+                            <VBox>
+                                <Table
+                                    id="relatedItemsTable"
+                                    items="{viewModel>/relatedItems}"
+                                    growing="true"
+                                    growingScrollToLoad="true"
+                                    growingThreshold="10"
+                                    sticky="ColumnHeaders,HeaderToolbar">
+                                    <headerToolbar>
+                                        <Toolbar>
+                                            <Title text="Related Items" level="H2"/>
+                                            <ToolbarSpacer/>
+                                            <SearchField 
+                                                id="relatedItemsSearchField"
+                                                width="30%" 
+                                                search=".onRelatedItemsSearch"/>
+                                            <Button 
+                                                text="Add New" 
+                                                icon="sap-icon://add" 
+                                                press=".onAddRelatedItemPress" 
+                                                type="Emphasized"/>
+                                        </Toolbar>
+                                    </headerToolbar>
+                                    <!-- Columns will be added dynamically by the controller -->
+                                    <columns>
+                                        <!-- Columns will be added dynamically -->
+                                    </columns>
+                                    <items>
+                                        <ColumnListItem type="Active" press=".onRelatedItemPress">
+                                            <!-- Cells will be added dynamically -->
+                                        </ColumnListItem>
+                                    </items>
+                                </Table>
+                            </VBox>
+                        </uxap:blocks>
+                    </uxap:ObjectPageSubSection>
+                </uxap:subSections>
+            </uxap:ObjectPageSection>
+
+            <!-- Additional Information Section -->
+            <uxap:ObjectPageSection title="Additional Information">
+                <uxap:subSections>
+                    <uxap:ObjectPageSubSection title="Notes & Attachments">
+                        <uxap:blocks>
+                            <VBox>
+                                <Panel headerText="Notes">
+                                    <TextArea rows="4" width="100%" placeholder="Add notes about this entity..." class="sapUiSmallMarginBottom"/>
+                                    <Button text="Save Notes" type="Emphasized" width="auto"/>
+                                </Panel>
+                                
+                                <Panel headerText="Statistics" class="sapUiMediumMarginTop">
+                                    <form:SimpleForm layout="ResponsiveGridLayout" editable="false">
+                                        <core:Title text="Entity Statistics" />
+                                        <Label text="Related Items Count" />
+                                        <Text text="{viewModel>/relatedItems/length}" />
+                                        
+                                        <Label text="Last Modified By" />
+                                        <Text text="System" />
+                                        
+                                        <Label text="Creation Date" />
+                                        <Text text="{path: 'viewModel>/entity/created_at', formatter: '.formatter.formatDate'}" />
+                                    </form:SimpleForm>
+                                </Panel>
+                            </VBox>
+                        </uxap:blocks>
+                    </uxap:ObjectPageSubSection>
+                </uxap:subSections>
+            </uxap:ObjectPageSection>
+        </uxap:sections>
+    </uxap:ObjectPageLayout>
+</mvc:View>

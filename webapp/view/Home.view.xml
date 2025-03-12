@@ -1,0 +1,47 @@
+<mvc:View
+    controllerName="com.supabase.easyui5.controller.Home"
+    xmlns:mvc="sap.ui.core.mvc"
+    xmlns="sap.m"
+    xmlns:core="sap.ui.core"
+    displayBlock="true">
+    
+    <Page id="homePage" title="Data Management">
+        <customHeader>
+            <Toolbar>
+                <Title text="Supabase OpenUI5 Application" level="H2" />
+                <ToolbarSpacer />
+                <Button icon="sap-icon://home" type="Transparent" press=".onNavHome" />
+            </Toolbar>
+        </customHeader>
+        
+        <content>
+            <VBox class="sapUiMediumMargin">
+                <Title text="Data Management" level="H3" class="sapUiMediumMarginBottom" />
+                
+                <List
+                    id="entityList"
+                    items="{tables>/tables}">
+                    <items>
+                        <StandardListItem
+                            title="{tables>title}"
+                            description="Manage {tables>title}"
+                            icon="{tables>icon}"
+                            type="Navigation" 
+                            press=".onListItemPress">
+                            <customData>
+                                <core:CustomData key="table" value="{tables>id}" />
+                            </customData>
+                        </StandardListItem>
+                    </items>
+                </List>
+            </VBox>
+        </content>
+        
+        <footer>
+            <Toolbar>
+                <ToolbarSpacer />
+                <Text text="Connected to Supabase" />
+            </Toolbar>
+        </footer>
+    </Page>
+</mvc:View>

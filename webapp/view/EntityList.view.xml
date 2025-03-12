@@ -1,0 +1,75 @@
+<mvc:View
+    controllerName="com.supabase.easyui5.controller.EntityList"
+    xmlns:mvc="sap.ui.core.mvc"
+    xmlns="sap.m"
+    xmlns:f="sap.f"
+    xmlns:core="sap.ui.core"
+    displayBlock="true">
+    
+    <Page id="entityListPage" title="{viewModel>/tableName} List">
+        <customHeader>
+            <Toolbar>
+                <Button icon="sap-icon://nav-back" press=".onNavBack" />
+                <Title text="{viewModel>/tableName} List" level="H2" />
+                <ToolbarSpacer />
+                <Button icon="sap-icon://add" tooltip="Create New" press=".onCreatePress" />
+                <Button icon="sap-icon://refresh" tooltip="Refresh Data" press=".onRefreshPress" />
+            </Toolbar>
+        </customHeader>
+        
+        <content>
+            <f:DynamicPage>
+                <f:title>
+                    <f:DynamicPageTitle>
+                        <f:heading>
+                            <Title text="{viewModel>/tableName} Management" />
+                        </f:heading>
+                        <f:actions>
+                            <SearchField width="300px" placeholder="Search..." search=".onSearch" />
+                        </f:actions>
+                    </f:DynamicPageTitle>
+                </f:title>
+                
+                <f:content>
+                    <VBox class="sapUiSmallMargin">
+                        <MessageStrip
+                            text="Click on any row to view details"
+                            type="Information"
+                            showIcon="true"
+                            class="sapUiSmallMarginBottom">
+                        </MessageStrip>
+                        
+                        <Table
+                            id="entityTable"
+                            growing="true"
+                            growingThreshold="20"
+                            growingScrollToLoad="true"
+                            sticky="ColumnHeaders,HeaderToolbar"
+                            updateFinished=".onTableUpdateFinished">
+                            
+                            <!-- The columns will be added dynamically in the controller -->
+                            <columns>
+                                <!-- Dynamic columns -->
+                            </columns>
+                            
+                            <!-- Define a template for the rows that will be filled dynamically -->
+                            <items>
+                                <ColumnListItem type="Navigation" press=".onItemPress">
+                                    <!-- The cells will be added dynamically in the controller -->
+                                </ColumnListItem>
+                            </items>
+                        </Table>
+                    </VBox>
+                </f:content>
+            </f:DynamicPage>
+        </content>
+        
+        <footer>
+            <Toolbar>
+                <Text id="tableCountText" text="No items" />
+                <ToolbarSpacer />
+                <Button icon="sap-icon://delete" text="Delete Selected" press=".onDeletePress" enabled="false" visible="false" id="deleteButton" />
+            </Toolbar>
+        </footer>
+    </Page>
+</mvc:View>

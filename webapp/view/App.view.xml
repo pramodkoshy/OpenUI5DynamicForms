@@ -1,9 +1,9 @@
 <mvc:View
-	controllerName="com.supabase.easyui5.controller.App"
-	displayBlock="true"
-	xmlns="sap.m"
-	xmlns:mvc="sap.ui.core.mvc">
-
-	<App id="app" />
-
+    controllerName="com.supabase.easyui5.controller.App"
+    xmlns="sap.m"
+    xmlns:mvc="sap.ui.core.mvc"
+    displayBlock="true">
+    <App id="app">
+        <!-- This is where pages will be placed by the router -->
+    </App>
 </mvc:View>

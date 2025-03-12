@@ -1,10 +1,12 @@
-sap.ui.define(["./BaseController"], function (BaseController) {
-	"use strict";
+sap.ui.define([
+    "com/supabase/easyui5/controller/BaseController"
+], function(BaseController) {
+    "use strict";
 
-	return BaseController.extend("com.supabase.easyui5.controller.App", {
-		onInit: function () {
-			// apply content density mode to root view
-			this.getView().addStyleClass(this.getOwnerComponent().getContentDensityClass());
-		}
-	});
+    return BaseController.extend("com.supabase.easyui5.controller.App", {
+        onInit: function() {
+            // Apply content density mode
+            this.getView().addStyleClass(this.getOwnerComponent().getContentDensityClass());
+        }
+    });
 });

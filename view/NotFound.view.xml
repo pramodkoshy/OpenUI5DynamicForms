@@ -1,0 +1,44 @@
+<mvc:View
+    controllerName="com.supabase.easyui5.controller.NotFound"
+    xmlns:mvc="sap.ui.core.mvc"
+    xmlns="sap.m"
+    xmlns:core="sap.ui.core"
+    displayBlock="true">
+    
+    <Page showHeader="false" title="{i18n>notFoundTitle}">
+        <content>
+            <FlexBox
+                height="100%"
+                alignItems="Center"
+                justifyContent="Center">
+                <FlexBox
+                    direction="Column"
+                    alignItems="Center"
+                    justifyContent="Center"
+                    width="100%">
+                    <core:Icon
+                        src="sap-icon://document"
+                        size="8rem"
+                        class="sapUiMediumMarginBottom" />
+                     
+                    
+                    <Title
+                        text="{i18n>notFoundTitle}"
+                        level="H1"
+                        titleStyle="H1"
+                        class="sapUiMediumMarginBottom" />
+                    
+                    <Text
+                        text="{i18n>notFoundText}"
+                        class="sapUiMediumMarginBottom" />
+                    
+                    <Button
+                        text="{i18n>backToHome}"
+                        press=".onNavBack"
+                        type="Emphasized"
+                        class="sapUiMediumMarginBottom" />
+                </FlexBox>
+            </FlexBox>
+        </content>
+    </Page>
+</mvc:View>

@@ -347,9 +347,10 @@ sap.ui.define([
          * @param {string} sFieldName The field name
          * @private
          */
-        _loadRelationOptions: function(oComboBox, sRelatedTable, sFieldName) {
+                // Line 350 context (fix by removing the unused parameter):
+        _loadRelationOptions: function(oComboBox, sRelatedTable) {
             // Get metadata for related table
-            this.getTableMetadata(sRelatedTable).then((oMetadata) => {
+            this.getTableMetadata(sRelatedTable).then(function(oMetadata) {
                 const sPrimaryKey = oMetadata.primaryKey;
                 const sTitleField = oMetadata.titleField || sPrimaryKey;
                 
@@ -365,13 +366,13 @@ sap.ui.define([
                         
                         // Add items to combo box
                         data.forEach((oRelatedEntity) => {
-                            oComboBox.addItem(new Item({
+                            oComboBox.addItem(new sap.ui.core.Item({
                                 key: oRelatedEntity[sPrimaryKey],
                                 text: oRelatedEntity[sTitleField]
                             }));
                         });
                     });
-            });
+            }.bind(this));
         },
         
         /**
@@ -871,6 +872,32 @@ sap.ui.define([
             this.getRouter().navTo("entityList", {
                 table: sTableId
             });
+        },
+
+        // Line 205 context (fix by removing the unused parameter):
+        getRelatedRecords: function(sTableId, sForeignKey, sPrimaryKeyValue) {
+            return new Promise((resolve, reject) => {
+                this.getSupabaseClient()
+                    .from(sTableId)
+                    .select('*')
+                    .eq(sForeignKey, sPrimaryKeyValue)
+                    .then(({ data, error }) => {
+                        if (error) {
+                            reject(error);
+                            return;
+                        }
+                        resolve(data || []);
+                    })
+                    .catch(error => {
+                        reject(error);
+                    });
+            });
         }
+
+        
+
+
     });
+
+    
 });

@@ -43,7 +43,8 @@ sap.ui.define([
             script.type = 'module';
             script.onload = () => {
                 // After script is loaded, create and expose Supabase client
-                window.supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
+                // Fix for 'supabase' is not defined by using window.supabase
+                window.supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
                 
                 // Create a model with Supabase tables metadata
                 const tablesModel = new sap.ui.model.json.JSONModel({

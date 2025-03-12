@@ -9,7 +9,7 @@ sap.ui.define([
         onInit: function() {
             // For debugging, create a local model if the tables model isn't available
             if (!this.getOwnerComponent().getModel("tables")) {
-                var oTablesModel = new JSONModel({
+                const oTablesModel = new JSONModel({
                     tables: [
                         { id: "suppliers", title: "Suppliers", icon: "sap-icon://supplier" },
                         { id: "products", title: "Products", icon: "sap-icon://product" },
@@ -29,12 +29,12 @@ sap.ui.define([
          */
         onListItemPress: function(oEvent) {
             // Get the binding context of the pressed item
-            var oItem = oEvent.getSource();
-            var oContext = oItem.getBindingContext("tables");
+            const oItem = oEvent.getSource();
+            const oContext = oItem.getBindingContext("tables");
             
             if (oContext) {
                 // Get the table ID directly from the binding context
-                var sTableId = oContext.getProperty("id");
+                const sTableId = oContext.getProperty("id");
                 console.log("Navigating to table: " + sTableId);
                 
                 // Navigate to the entity list
@@ -43,11 +43,11 @@ sap.ui.define([
                 });
             } else {
                 // Alternative approach using custom data
-                var oCustomData = oItem.getCustomData();
+                const oCustomData = oItem.getCustomData();
                 if (oCustomData && oCustomData.length > 0) {
-                    for (var i = 0; i < oCustomData.length; i++) {
+                    for (let i = 0; i < oCustomData.length; i++) {
                         if (oCustomData[i].getKey() === "table") {
-                            var sTableId = oCustomData[i].getValue();
+                            const sTableId = oCustomData[i].getValue();
                             console.log("Navigating to table (from custom data): " + sTableId);
                             
                             // Navigate to the entity list

@@ -3,9 +3,8 @@ sap.ui.define([
     "sap/ui/model/json/JSONModel",
     "sap/m/Column",
     "sap/m/Text",
-    "sap/m/Label",
-    "sap/ui/core/Item"
-], function(BaseController, JSONModel, Column, Text, Label, Item) {
+    "sap/m/Label"
+], function(BaseController, JSONModel, Column, Text, Label) {
     "use strict";
 
     return BaseController.extend("com.supabase.easyui5.controller.EntityList", {

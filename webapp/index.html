@@ -7,7 +7,16 @@
 
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>UI5 Application: com.supabase.easyui5</title>
+		<title>Supabase UI5 Application</title>
+
+		<!-- Add this script before bootstrap to override the flexibility services -->
+		<script>
+			// Disable flexibility services at the global level
+			window["sap-ui-xx-flexibilityServices"] = false;
+			window["sap-ui-config"] = window["sap-ui-config"] || {};
+			window["sap-ui-config"].flexibilityServices = false;
+			window["sap-ui-xx-handleValidation"] = false;
+		</script>
 
 		<script
 			id="sap-ui-bootstrap"

@@ -1,0 +1,82 @@
+<mvc:View
+    controllerName="com.supabase.easyui5.controller.EntityCreate"
+    xmlns:mvc="sap.ui.core.mvc"
+    xmlns="sap.m"
+    xmlns:layout="sap.ui.layout"
+    xmlns:form="sap.ui.layout.form"
+    xmlns:core="sap.ui.core"
+    xmlns:f="sap.f"
+    displayBlock="true"
+    id="entityCreateView">
+    
+    <Page id="entityCreatePage" title="Create New {viewModel>/tableName}" showHeader="true">
+        <customHeader>
+            <Toolbar>
+                <Button 
+                    id="navToggleButton" 
+                    icon="sap-icon://menu2" 
+                    press=".onToggleNav" />
+                <Title text="Create New {viewModel>/tableName}" level="H2" />
+                <ToolbarSpacer />
+            </Toolbar>
+        </customHeader>
+        
+        <content>
+            <f:DynamicPage showFooter="true">
+                <f:title>
+                    <f:DynamicPageTitle>
+                        <f:heading>
+                            <Title text="Create New {viewModel>/tableName}" />
+                        </f:heading>
+                    </f:DynamicPageTitle>
+                </f:title>
+                
+                <f:content>
+                    <form:Form 
+    id="entityCreateForm"
+    editable="true">
+    <form:layout>
+        <form:ResponsiveGridLayout
+            labelSpanXL="4"
+            labelSpanL="4"
+            labelSpanM="4"
+            labelSpanS="12"
+            adjustLabelSpan="false"
+            emptySpanXL="0"
+            emptySpanL="0"
+            emptySpanM="0"
+            emptySpanS="0"
+            columnsXL="2"
+            columnsL="2"
+            columnsM="1"
+            singleContainerFullSize="false" />
+    </form:layout>
+    <form:formContainers>
+        <form:FormContainer 
+            id="entityCreateContainer"
+            title="Create New Entry">
+            <form:formElements>
+                <!-- Form elements will be added dynamically by the controller -->
+            </form:formElements>
+        </form:FormContainer>
+    </form:formContainers>
+</form:Form>
+                </f:content>
+                
+                <f:footer>
+                    <Toolbar>
+                        <ToolbarSpacer />
+                        <Button 
+                            type="Accept" 
+                            text="Save" 
+                            press=".onSavePress" />
+                        <Button 
+                            type="Reject" 
+                            text="Cancel" 
+                            press=".onCancelPress" />
+                    </Toolbar>
+                </f:footer>
+            </f:DynamicPage>
+        </content>
+    </Page>
+</mvc:View>

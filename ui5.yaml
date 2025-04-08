@@ -19,3 +19,6 @@ server:
       afterMiddleware: compression
     - name: ui5-middleware-livereload
       afterMiddleware: compression
+      configuration:
+        port: 35729  # This is the default LiveReload port
+        path: webapp

@@ -19,7 +19,7 @@
 		"test": "npm run lint && npm run karma-ci-cov"
 	},
 	"devDependencies": {
-		"@ui5/cli": "^4.0.6",
+		"@ui5/cli": "^4.0.14",
 		"@ui5/middleware-code-coverage": "^2.0.0",
 		"eslint": "^9.9.1",
 		"eslint-plugin-jsdoc": "^50.2.2",
@@ -29,6 +29,6 @@
 		"karma-coverage": "^2.2.1",
 		"karma-ui5": "^4.0.1",
 		"rimraf": "^6.0.1",
-		"ui5-middleware-livereload": "^3.0.3"
+		"ui5-middleware-livereload": "^3.1.1"
 	}
 }

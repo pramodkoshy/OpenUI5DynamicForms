@@ -26,6 +26,74 @@ sap.ui.define([
             this.getRouter().getRoute("entityList").attachPatternMatched(this._onRouteMatched, this);
         },
         
+       /**
+         * Toggle navigation panel
+         */
+        onToggleNav: function() {
+            // Get SplitApp directly
+            let oSplitApp = sap.ui.getCore().byId("__component0---app--app");
+            
+            // If direct approach fails, try other methods
+            if (!oSplitApp) {
+                console.log("Direct SplitApp access failed, trying fallbacks");
+                // Try component
+                if (this.getOwnerComponent().getSplitApp) {
+                    oSplitApp = this.getOwnerComponent().getSplitApp();
+                }
+                
+                // Try root control
+                if (!oSplitApp && this.getOwnerComponent().getRootControl()) {
+                    oSplitApp = this.getOwnerComponent().getRootControl().byId("app");
+                }
+            }
+            
+            // Get app view model (either from component or directly)
+            let oAppViewModel = this.getOwnerComponent().getModel("appView");
+            if (!oAppViewModel) {
+                // Try getting it from the component's root view
+                const oRootControl = this.getOwnerComponent().getRootControl();
+                if (oRootControl && oRootControl.getModel) {
+                    oAppViewModel = oRootControl.getModel("appView");
+                }
+            }
+            
+            // Get toggle button 
+            const oToggleButton = this.getView().byId("navToggleButton");
+            
+            console.log("Detail toggle nav button pressed");
+            console.log("SplitApp reference:", oSplitApp);
+            console.log("AppViewModel:", oAppViewModel);
+            
+            if (oSplitApp) {
+                // Get current state from model or assume it's hidden in detail view
+                const bExpanded = oAppViewModel ? oAppViewModel.getProperty("/navExpanded") : false;
+                
+                console.log("Current nav state:", bExpanded ? "expanded" : "collapsed");
+                
+                // Set the mode to ShowHideMode to ensure the master can be shown
+                oSplitApp.setMode("ShowHideMode");
+                
+                // Use timeout to ensure mode is applied
+                setTimeout(function() {
+                    // Show the master panel
+                    console.log("Showing master panel");
+                    oSplitApp.showMaster();
+                    
+                    // Update button if available
+                    if (oToggleButton) {
+                        oToggleButton.setIcon("sap-icon://navigation-left-arrow");
+                        oToggleButton.setTooltip("Hide Navigation");
+                    }
+                    
+                    // Update model if available
+                    if (oAppViewModel) {
+                        oAppViewModel.setProperty("/navExpanded", true);
+                    }
+                }, 0);
+            } else {
+                console.error("Could not find SplitApp control");
+            }
+        },
         /**
          * Route matched handler
          * @param {sap.ui.base.Event} oEvent The route matched event

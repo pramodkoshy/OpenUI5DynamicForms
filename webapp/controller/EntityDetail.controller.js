@@ -1,16 +1,16 @@
 sap.ui.define([
     "com/supabase/easyui5/controller/BaseController",
     "sap/ui/model/json/JSONModel",
-    "sap/m/Label",
-    "sap/m/Input",
-    "sap/m/DatePicker",
-    "sap/m/TextArea",
-    "sap/m/CheckBox",
     "sap/m/Text",
-    "sap/m/ComboBox",
-    "sap/ui/core/Item",
-    "sap/m/Column"
-], function(BaseController, JSONModel, Label, Input, DatePicker, TextArea, CheckBox, Text, ComboBox, Item, Column) {
+    "sap/m/Input",
+    "sap/m/Label"
+], function(
+    BaseController, 
+    JSONModel, 
+    Text, 
+    Input, 
+    Label
+) {
     "use strict";
 
     return BaseController.extend("com.supabase.easyui5.controller.EntityDetail", {
@@ -24,13 +24,28 @@ sap.ui.define([
                     return "";
                 }
                 return new Date(dateString).toLocaleDateString();
+            },
+            
+            formatBoolean: function(bValue) {
+                return bValue ? "Yes" : "No";
+            },
+            
+            formatNumber: function(nValue) {
+                if (nValue === undefined || nValue === null) {
+                    return "";
+                }
+                return parseFloat(nValue).toFixed(2);
             }
         },
         
         /**
          * Lifecycle hook when the controller is initialized
          */
+  
         onInit: function() {
+            console.log("EntityDetail controller initialized");
+            
+            // Create view model
             const oViewModel = new JSONModel({
                 tableName: "",
                 tableId: "",
@@ -38,18 +53,46 @@ sap.ui.define([
                 entityTitle: "",
                 entitySubtitle: "",
                 entity: {},
+                originalEntity: {}, // Store original data for cancel functionality
                 relatedItems: [],
                 filteredRelatedItems: [],
                 editMode: false,
                 busy: false,
-                delay: 0
+                delay: 0,
+                validationErrors: {}
             });
             
-            this.setModel(oViewModel, "viewModel");
+            // Set the model on the view with the name "viewModel"
+            this.getView().setModel(oViewModel, "viewModel");
             
             // Register for route matched event
             this.getRouter().getRoute("entityDetail").attachPatternMatched(this._onRouteMatched, this);
+            
+            // Explicitly register extensions
+            this._registerExtensions();
         },
+        
+        _registerExtensions: function() {
+            console.log("Registering controller extensions");
+            try {
+                const extensionsModule = sap.ui.require("com/supabase/easyui5/controller/EntityDetailExtensions");
+                if (extensionsModule) {
+                    console.log("Extensions module found");
+                    const extensions = extensionsModule();
+                    console.log("Registered extensions:", extensions);
+                    
+                    // Expose save and cancel handlers
+                    this.onSavePress = extensions.actions.onSavePress.bind(this);
+                    this.onCancelPress = extensions.actions.onCancelPress.bind(this);
+                } else {
+                    console.error("Extensions module not found");
+                }
+            } catch (error) {
+                console.error("Error registering extensions:", error);
+            }
+        },
+        
+
         
         /**
          * Route matched handler
@@ -73,8 +116,195 @@ sap.ui.define([
             const sTableName = sTableId.charAt(0).toUpperCase() + sTableId.slice(1).replace(/_/g, " ");
             oViewModel.setProperty("/tableName", sTableName);
             
+            // Reset validation errors
+            oViewModel.setProperty("/validationErrors", {});
+            
+            // Reset edit mode
+            oViewModel.setProperty("/editMode", false);
+            
             // Load entity data
             this._loadEntity(sTableId, sEntityId);
+        },
+        
+        /**
+         * Direct form configuration method if extensions fail
+         * @param {Object} oMetadata Table metadata
+         * @param {Object} oData Entity data
+         * @private
+         */
+        _configureForm: function(oMetadata, oData) {
+            const oFormContainer = this.getView().byId("entityDetailsContainer");
+            
+            // Clear existing form elements
+            oFormContainer.removeAllFormElements();
+            
+            // Add form elements based on metadata
+            oMetadata.columns.forEach((oColumnMetadata) => {
+                // Skip non-visible columns
+                if (!oColumnMetadata.visible) return;
+                
+                // Create form element
+                const oFormElement = new sap.ui.layout.form.FormElement({
+                    label: new Label({
+                        text: oColumnMetadata.label
+                    })
+                });
+                
+                // Create text field
+                let oControl;
+                
+                switch (oColumnMetadata.type) {
+                    case "relation":
+                        oControl = new Text({
+                            text: oData[oColumnMetadata.name + "_text"] || oData[oColumnMetadata.name]
+                        });
+                        break;
+                    case "boolean":
+                        oControl = new Text({
+                            text: this.formatter.formatBoolean(oData[oColumnMetadata.name])
+                        });
+                        break;
+                    case "date":
+                        oControl = new Text({
+                            text: this.formatter.formatDate(oData[oColumnMetadata.name])
+                        });
+                        break;
+                    case "number":
+                        oControl = new Text({
+                            text: this.formatter.formatNumber(oData[oColumnMetadata.name])
+                        });
+                        break;
+                    default:
+                        oControl = new Text({
+                            text: oData[oColumnMetadata.name] || ""
+                        });
+                }
+                
+                oFormElement.addField(oControl);
+                oFormContainer.addFormElement(oFormElement);
+            });
+        },
+        
+        /**
+         * Direct related items loading method if extensions fail
+         * @param {Object} oMetadata Table metadata
+         * @param {Object} oData Entity data
+         * @private
+         */
+        _loadRelatedItems: function(oMetadata, oData) {
+            const oViewModel = this.getModel("viewModel");
+            
+            // Check if relations exist
+            if (!oMetadata.relations || oMetadata.relations.length === 0) {
+                oViewModel.setProperty("/busy", false);
+                return;
+            }
+            
+            const oRelation = oMetadata.relations[0];
+            const sPrimaryKey = oMetadata.primaryKey;
+            
+            // Fetch related items
+            this.getSupabaseClient()
+                .from(oRelation.table)
+                .select('*')
+                .eq(oRelation.foreignKey, oData[sPrimaryKey])
+                .then(({ data: relatedData, error }) => {
+                    if (error) {
+                        console.error("Error loading related items", error);
+                        oViewModel.setProperty("/busy", false);
+                        return;
+                    }
+                    
+                    console.log("Related items loaded:", relatedData);
+                    
+                    // Update view model
+                    oViewModel.setProperty("/relatedItems", relatedData || []);
+                    oViewModel.setProperty("/filteredRelatedItems", relatedData || []);
+                    
+                    // Configure related items table
+                    this._configureRelatedItemsTable(oRelation.table);
+                    
+                    // Set busy to false
+                    oViewModel.setProperty("/busy", false);
+                })
+                .catch(error => {
+                    console.error("Error fetching related items", error);
+                    oViewModel.setProperty("/busy", false);
+                });
+        },
+        
+        /**
+         * Configure related items table
+         * @param {string} sTableId Table ID
+         * @private
+         */
+        _configureRelatedItemsTable: function(sTableId) {
+            this.getTableMetadata(sTableId).then(oMetadata => {
+                const oTable = this.getView().byId("relatedItemsTable");
+                
+                if (!oTable) {
+                    console.error("Related items table not found");
+                    return;
+                }
+                
+                // Clear existing columns
+                oTable.removeAllColumns();
+                
+                // Add columns
+                const aVisibleColumns = oMetadata.columns.filter(col => col.visible).slice(0, 5);
+                
+                aVisibleColumns.forEach(oColumnMetadata => {
+                    oTable.addColumn(new sap.m.Column({
+                        header: new sap.m.Label({ text: oColumnMetadata.label })
+                    }));
+                });
+                
+                // Rebind table
+                oTable.bindItems({
+                    path: "viewModel>/filteredRelatedItems",
+                    template: new sap.m.ColumnListItem({
+                        cells: aVisibleColumns.map(oColumnMetadata => {
+                            let oCell;
+                            switch (oColumnMetadata.type) {
+                                case "relation":
+                                    oCell = new sap.m.Text({ 
+                                        text: "{viewModel>" + oColumnMetadata.name + "_text}" 
+                                    });
+                                    break;
+                                case "boolean":
+                                    oCell = new sap.m.Text({ 
+                                        text: {
+                                            path: "viewModel>" + oColumnMetadata.name,
+                                            formatter: this.formatter.formatBoolean
+                                        }
+                                    });
+                                    break;
+                                case "date":
+                                    oCell = new sap.m.Text({ 
+                                        text: {
+                                            path: "viewModel>" + oColumnMetadata.name,
+                                            formatter: this.formatter.formatDate
+                                        }
+                                    });
+                                    break;
+                                case "number":
+                                    oCell = new sap.m.Text({ 
+                                        text: {
+                                            path: "viewModel>" + oColumnMetadata.name,
+                                            formatter: this.formatter.formatNumber
+                                        }
+                                    });
+                                    break;
+                                default:
+                                    oCell = new sap.m.Text({ 
+                                        text: "{viewModel>" + oColumnMetadata.name + "}" 
+                                    });
+                            }
+                            return oCell;
+                        })
+                    })
+                });
+            });
         },
         
         /**
@@ -84,15 +314,16 @@ sap.ui.define([
          * @private
          */
         _loadEntity: function(sTableId, sEntityId) {
+            console.log("Loading entity data for table:", sTableId, "entity ID:", sEntityId);
+            
             const oViewModel = this.getModel("viewModel");
             
             // Set busy state
             oViewModel.setProperty("/busy", true);
             
-            console.log("Loading entity data", sTableId, sEntityId);
-            
             // Get metadata to determine primary key
             this.getTableMetadata(sTableId).then((oMetadata) => {
+                console.log("Got metadata for table:", sTableId);
                 const sPrimaryKey = oMetadata.primaryKey;
                 
                 console.log("Primary key from metadata:", sPrimaryKey);
@@ -160,6 +391,7 @@ sap.ui.define([
                         }
                         
                         // Update entity in model
+                        console.log("Setting entity data to model");
                         oViewModel.setProperty("/entity", data);
                         
                         // Set entity title and subtitle
@@ -174,17 +406,15 @@ sap.ui.define([
                             oViewModel.setProperty("/entitySubtitle", "ID: " + data[sPrimaryKey]);
                         }
                         
-                        // Configure form fields
-                        this._configureForm(oMetadata, data);
-                        
-                        // Load related items if any
-                        if (oMetadata.relations && oMetadata.relations.length > 0) {
+                        // Try to configure form and load related items
+                        try {
+                            this._configureForm(oMetadata, data);
                             this._loadRelatedItems(oMetadata, data);
+                        } catch (extensionError) {
+                            console.error("Error in form/related items processing:", extensionError);
+                            oViewModel.setProperty("/busy", false);
                         }
-                        
-                        oViewModel.setProperty("/busy", false);
-                    })
-                    .catch(error => {
+                    }).catch(error => {
                         console.error("Error in Supabase query:", error);
                         this.showErrorMessage("Error loading entity: " + error.message);
                         oViewModel.setProperty("/busy", false);
@@ -197,158 +427,256 @@ sap.ui.define([
         },
         
         /**
-         * Configure form fields based on metadata
-         * @param {Object} oMetadata The table metadata
-         * @param {Object} oData The entity data
-         * @private
+         * Navigation handler
          */
-        _configureForm: function(oMetadata, oData) {
-            try {
-                // Get the SimpleForm from the view
-                const oForm = this.getView().byId("entityDetailsForm");
+        onNavBack: function() {
+            const sTableId = this.getModel("viewModel").getProperty("/tableId");
+            
+            // Navigate back to list
+            this.getRouter().navTo("entityList", {
+                table: sTableId
+            });
+        },
+
+
+        /**
+         * Toggle navigation panel
+         */
+        onToggleNav: function() {
+            // Get SplitApp directly
+            let oSplitApp = sap.ui.getCore().byId("__component0---app--app");
+            
+            // If direct approach fails, try other methods
+            if (!oSplitApp) {
+                console.log("Direct SplitApp access failed, trying fallbacks");
+                // Try component
+                if (this.getOwnerComponent().getSplitApp) {
+                    oSplitApp = this.getOwnerComponent().getSplitApp();
+                }
                 
-                // Clear existing form content
-                oForm.removeAllContent();
+                // Try root control
+                if (!oSplitApp && this.getOwnerComponent().getRootControl()) {
+                    oSplitApp = this.getOwnerComponent().getRootControl().byId("app");
+                }
+            }
+            
+            // Get app view model (either from component or directly)
+            let oAppViewModel = this.getOwnerComponent().getModel("appView");
+            if (!oAppViewModel) {
+                // Try getting it from the component's root view
+                const oRootControl = this.getOwnerComponent().getRootControl();
+                if (oRootControl && oRootControl.getModel) {
+                    oAppViewModel = oRootControl.getModel("appView");
+                }
+            }
+            
+            // Get toggle button 
+            const oToggleButton = this.getView().byId("navToggleButton");
+            
+            console.log("Detail toggle nav button pressed");
+            console.log("SplitApp reference:", oSplitApp);
+            console.log("AppViewModel:", oAppViewModel);
+            
+            if (oSplitApp) {
+                // Get current state from model or assume it's hidden in detail view
+                const bExpanded = oAppViewModel ? oAppViewModel.getProperty("/navExpanded") : false;
                 
-                // Add fields based on metadata
-                oMetadata.columns.forEach((oColumnMetadata) => {
-                    // Create label
-                    const oLabel = new Label({
-                        text: oColumnMetadata.label,
-                        required: oColumnMetadata.required
-                    });
+                console.log("Current nav state:", bExpanded ? "expanded" : "collapsed");
+                
+                // Set the mode to ShowHideMode to ensure the master can be shown
+                oSplitApp.setMode("ShowHideMode");
+                
+                // Use timeout to ensure mode is applied
+                setTimeout(function() {
+                    // Show the master panel
+                    console.log("Showing master panel");
+                    oSplitApp.showMaster();
                     
-                    oForm.addContent(oLabel);
-                    
-                    // Create field
-                    let oField;
-                    const bEditable = oColumnMetadata.editable !== false;
-                    
-                    switch (oColumnMetadata.type) {
-                        case "string":
-                            if (bEditable) {
-                                oField = new Input({
-                                    value: "{viewModel>/entity/" + oColumnMetadata.name + "}",
-                                    enabled: "{viewModel>/editMode}"
-                                });
-                            } else {
-                                oField = new Text({
-                                    text: "{viewModel>/entity/" + oColumnMetadata.name + "}"
-                                });
-                            }
-                            break;
-                        case "text":
-                            if (bEditable) {
-                                oField = new TextArea({
-                                    value: "{viewModel>/entity/" + oColumnMetadata.name + "}",
-                                    rows: 4,
-                                    width: "100%",
-                                    enabled: "{viewModel>/editMode}"
-                                });
-                            } else {
-                                oField = new Text({
-                                    text: "{viewModel>/entity/" + oColumnMetadata.name + "}"
-                                });
-                            }
-                            break;
-                        case "number":
-                            if (bEditable) {
-                                oField = new Input({
-                                    value: "{viewModel>/entity/" + oColumnMetadata.name + "}",
-                                    type: "Number",
-                                    enabled: "{viewModel>/editMode}"
-                                });
-                            } else {
-                                oField = new Text({
-                                    text: "{viewModel>/entity/" + oColumnMetadata.name + "}"
-                                });
-                            }
-                            break;
-                        case "date":
-                            if (bEditable) {
-                                oField = new DatePicker({
-                                    value: {
-                                        path: "viewModel>/entity/" + oColumnMetadata.name,
-                                        formatter: function(value) {
-                                            if (!value) {
-                                                return null;
-                                            }
-                                            
-                                            return new Date(value);
-                                        }
-                                    },
-                                    enabled: "{viewModel>/editMode}"
-                                });
-                            } else {
-                                oField = new Text({
-                                    text: {
-                                        path: "viewModel>/entity/" + oColumnMetadata.name,
-                                        formatter: function(value) {
-                                            if (!value) {
-                                                return "";
-                                            }
-                                            
-                                            return new Date(value).toLocaleDateString();
-                                        }
-                                    }
-                                });
-                            }
-                            break;
-                        case "boolean":
-                            if (bEditable) {
-                                oField = new CheckBox({
-                                    selected: "{viewModel>/entity/" + oColumnMetadata.name + "}",
-                                    enabled: "{viewModel>/editMode}"
-                                });
-                            } else {
-                                oField = new Text({
-                                    text: {
-                                        path: "viewModel>/entity/" + oColumnMetadata.name,
-                                        formatter: function(value) {
-                                            return value ? "Yes" : "No";
-                                        }
-                                    }
-                                });
-                            }
-                            break;
-                        case "relation":
-                            if (bEditable) {
-                                oField = new ComboBox({
-                                    selectedKey: "{viewModel>/entity/" + oColumnMetadata.name + "}",
-                                    enabled: "{viewModel>/editMode}"
-                                });
-                                
-                                // Load related entities
-                                this._loadRelationOptions(oField, oColumnMetadata.relation, oColumnMetadata.name);
-                            } else {
-                                oField = new Text({
-                                    text: "{viewModel>/entity/" + oColumnMetadata.name + "_text}"
-                                });
-                            }
-                            break;
-                        default:
-                            oField = new Text({
-                                text: "{viewModel>/entity/" + oColumnMetadata.name + "}"
-                            });
+                    // Update button if available
+                    if (oToggleButton) {
+                        oToggleButton.setIcon("sap-icon://navigation-left-arrow");
+                        oToggleButton.setTooltip("Hide Navigation");
                     }
                     
-                    oForm.addContent(oField);
-                });
-            } catch (e) {
-                console.error("Error configuring form:", e);
-                this.showErrorMessage("Error configuring form: " + e.message);
+                    // Update model if available
+                    if (oAppViewModel) {
+                        oAppViewModel.setProperty("/navExpanded", true);
+                    }
+                }, 0);
+            } else {
+                console.error("Could not find SplitApp control");
             }
+        },
+
+        onEditPress: function() {
+            console.log("Edit button pressed");
+            
+            // Get the view model and table ID
+            const oViewModel = this.getModel("viewModel");
+            const sTableId = oViewModel.getProperty("/tableId");
+            
+            // Set edit mode to true
+            oViewModel.setProperty("/editMode", true);
+            console.log("Edit mode set to true");
+            
+            // Load metadata and reconfigure form for edit mode
+            this.getTableMetadata(sTableId).then((oMetadata) => {
+                console.log("Metadata loaded for edit mode", oMetadata);
+                
+                // Get current entity data
+                const oEntityData = oViewModel.getProperty("/entity");
+                
+                // Configure form for edit mode
+                this._configureFormForEdit(oMetadata, oEntityData);
+            }).catch(error => {
+                console.error("Error getting table metadata for edit:", error);
+            });
+        },
+        
+        /**
+         * Fallback method to configure form for edit mode
+         * @param {Object} oMetadata Table metadata
+         * @param {Object} oEntityData Current entity data
+         * @private
+         */
+        _configureFormForEdit: function(oMetadata, oEntityData) {
+            console.log("Configuring form for edit mode");
+            
+            if (!oMetadata || !oEntityData) {
+                console.error("Metadata or entity data not available for edit form configuration");
+                return;
+            }
+            console.log("Fallback form configuration for edit mode");
+            
+            const oFormContainer = this.getView().byId("entityDetailsContainer");
+            if (!oFormContainer) {
+                console.error("Form container not found for edit");
+                return;
+            }
+            
+            // Clear existing form elements
+            oFormContainer.removeAllFormElements();
+            
+            // Process each column in metadata
+            oMetadata.columns.forEach((oColumnMetadata) => {
+                // Skip hidden or non-editable columns
+                if (!oColumnMetadata.visible || 
+                    oColumnMetadata.editable === false || 
+                    oColumnMetadata.name === oMetadata.primaryKey ||
+                    oColumnMetadata.name === 'created_at' ||
+                    oColumnMetadata.name === 'updated_at') {
+                    return;
+                }
+                
+                // Create form element
+                const oFormElement = new sap.ui.layout.form.FormElement({
+                    label: new sap.m.Label({
+                        text: oColumnMetadata.label || oColumnMetadata.name,
+                        required: oColumnMetadata.required
+                    })
+                });
+                
+                // Determine control for edit mode
+                const sPath = "viewModel>/entity/" + oColumnMetadata.name;
+                let oControl;
+                
+                switch (oColumnMetadata.type) {
+                    case "relation":
+                        oControl = new sap.m.ComboBox({
+                            selectedKey: {
+                                path: sPath,
+                                mode: 'TwoWay'
+                            },
+                            width: "100%"
+                        });
+                        
+                        // Load relation options
+                        this._loadRelationOptions(
+                            oControl, 
+                            oColumnMetadata.relation, 
+                            oColumnMetadata.name
+                        );
+                        break;
+                    
+                    case "boolean":
+                        oControl = new sap.m.CheckBox({
+                            selected: {
+                                path: sPath,
+                                mode: 'TwoWay'
+                            }
+                        });
+                        break;
+                    
+                    case "date":
+                        oControl = new sap.m.DatePicker({
+                            value: {
+                                path: sPath,
+                                mode: 'TwoWay',
+                                type: new sap.ui.model.type.Date({
+                                    pattern: "yyyy-MM-dd"
+                                })
+                            },
+                            valueFormat: "yyyy-MM-dd",
+                            displayFormat: "mediumDate",
+                            width: "100%"
+                        });
+                        break;
+                    
+                    case "number":
+                        oControl = new sap.m.Input({
+                            value: {
+                                path: sPath,
+                                mode: 'TwoWay',
+                                type: new sap.ui.model.type.Float({
+                                    decimals: 2
+                                })
+                            },
+                            type: "Number",
+                            width: "100%"
+                        });
+                        break;
+                    
+                    case "text":
+                        oControl = new sap.m.TextArea({
+                            value: {
+                                path: sPath,
+                                mode: 'TwoWay'
+                            },
+                            rows: 3,
+                            width: "100%"
+                        });
+                        break;
+                    
+                    default:
+                        oControl = new sap.m.Input({
+                            value: {
+                                path: sPath,
+                                mode: 'TwoWay'
+                            },
+                            width: "100%"
+                        });
+                }
+                
+                // Add field to form element
+                oFormElement.addField(oControl);
+                
+                // Add form element to container
+                oFormContainer.addFormElement(oFormElement);
+            });
+            
+            console.log("Fallback edit form configuration complete");
         },
         
         /**
          * Load options for relation fields
-         * @param {sap.m.ComboBox} oComboBox The combo box to fill
+         * @param {sap.m.ComboBox} oComboBox The ComboBox control
          * @param {string} sRelatedTable The related table
          * @param {string} sFieldName The field name
          * @private
          */
-                // Line 350 context (fix by removing the unused parameter):
-        _loadRelationOptions: function(oComboBox, sRelatedTable) {
+        _loadRelationOptions: function(oComboBox, sRelatedTable, sFieldName) {
+            console.log(`Loading relation options for ${sFieldName} from table ${sRelatedTable}`);
+            
             // Get metadata for related table
             this.getTableMetadata(sRelatedTable).then(function(oMetadata) {
                 const sPrimaryKey = oMetadata.primaryKey;
@@ -364,232 +692,60 @@ sap.ui.define([
                             return;
                         }
                         
-                        // Add items to combo box
-                        data.forEach((oRelatedEntity) => {
-                            oComboBox.addItem(new sap.ui.core.Item({
-                                key: oRelatedEntity[sPrimaryKey],
-                                text: oRelatedEntity[sTitleField]
-                            }));
+                        // Clear existing items
+                        oComboBox.removeAllItems();
+                        
+                        // Add items to ComboBox
+                        data.forEach(item => {
+                            const oItem = new sap.ui.core.Item({
+                                key: item[sPrimaryKey],
+                                text: item[sTitleField]
+                            });
+                            oComboBox.addItem(oItem);
                         });
                     });
             }.bind(this));
-        },
-        
-        /**
-         * Load related items
-         * @param {Object} oMetadata The table metadata
-         * @param {Object} oData The entity data
-         * @private
-         */
-        _loadRelatedItems: function(oMetadata, oData) {
-            try {
-                const oViewModel = this.getModel("viewModel");
-                const oRelatedItemsTable = this.getView().byId("relatedItemsTable");
-                
-                if (!oRelatedItemsTable) {
-                    console.error("Related items table not found in view");
-                    return;
-                }
-                
-                // Get the first relation
-                const oRelation = oMetadata.relations[0];
-                
-                // Get metadata for related table
-                this.getTableMetadata(oRelation.table).then((oRelatedMetadata) => {
-                    // Configure table columns
-                    oRelatedItemsTable.removeAllColumns();
-                    
-                    // Add columns for visible fields
-                    const visibleColumns = oRelatedMetadata.columns.filter(col => col.visible).slice(0, 5);
-                    visibleColumns.forEach(col => {
-                        oRelatedItemsTable.addColumn(new Column({
-                            header: new Text({ text: col.label })
-                        }));
-                    });
-                    
-                    // Add an actions column
-                    oRelatedItemsTable.addColumn(new Column({
-                        header: new Text({ text: "Actions" }),
-                        hAlign: "End"
-                    }));
-                    
-                    // Load related data
-                    this.getSupabaseClient()
-                        .from(oRelation.table)
-                        .select('*')
-                        .eq(oRelation.foreignKey, oData[oMetadata.primaryKey])
-                        .then(({ data: relatedData, error }) => {
-                            if (error) {
-                                console.error("Error loading related items", error);
-                                return;
-                            }
-                            
-                            // Store related items in view model
-                            oViewModel.setProperty("/relatedItems", relatedData || []);
-                            oViewModel.setProperty("/filteredRelatedItems", relatedData || []);
-                            
-                            // Configure item template
-                            const oTemplate = new sap.m.ColumnListItem({
-                                type: "Active",
-                                press: this.onRelatedItemPress.bind(this)
-                            });
-                            
-                            // Add cells for data columns
-                            visibleColumns.forEach(col => {
-                                let cell;
-                                
-                                if (col.type === "date") {
-                                    cell = new Text({
-                                        text: {
-                                            path: 'viewModel>' + col.name,
-                                            formatter: function(value) {
-                                                if (!value) return "";
-                                                return new Date(value).toLocaleDateString();
-                                            }
-                                        }
-                                    });
-                                } else if (col.type === "boolean") {
-                                    cell = new Text({
-                                        text: {
-                                            path: 'viewModel>' + col.name,
-                                            formatter: function(value) {
-                                                return value ? "Yes" : "No";
-                                            }
-                                        }
-                                    });
-                                } else {
-                                    cell = new Text({ 
-                                        text: '{viewModel>' + col.name + '}' 
-                                    });
-                                }
-                                
-                                oTemplate.addCell(cell);
-                            });
-                            
-                            // Add actions cell
-                            const actionsCell = new sap.m.HBox({
-                                items: [
-                                    new sap.m.Button({
-                                        icon: "sap-icon://edit",
-                                        type: "Transparent",
-                                        press: this.onEditRelatedItemPress.bind(this),
-                                        tooltip: "Edit"
-                                    }),
-                                    new sap.m.Button({
-                                        icon: "sap-icon://delete",
-                                        type: "Transparent",
-                                        press: this.onDeleteRelatedItemPress.bind(this),
-                                        tooltip: "Delete"
-                                    })
-                                ]
-                            });
-                            
-                            oTemplate.addCell(actionsCell);
-                            
-                            // Bind the table
-                            oRelatedItemsTable.bindItems({
-                                path: "viewModel>/filteredRelatedItems",
-                                template: oTemplate
-                            });
-                        });
+
+            // Check if the table has any relations
+            if (oMetadata.relations && oMetadata.relations.length > 0) {
+                // Create a button to add related items
+                const oAddRelatedButton = new sap.m.Button({
+                    text: "Add Related Item",
+                    press: this.onAddRelatedItemPress.bind(this),
+                    visible: "{= ${viewModel>/editMode} }"
                 });
-            } catch (e) {
-                console.error("Error loading related items:", e);
-                this.showErrorMessage("Error loading related items: " + e.message);
+                
+                // Add the button to the form container
+                oFormContainer.addContent(oAddRelatedButton);
             }
+
+
         },
+
         
-        /**
-         * Handler for related items search
-         * @param {sap.ui.base.Event} oEvent The search event
-         */
-        onRelatedItemsSearch: function(oEvent) {
-            const sQuery = oEvent.getParameter("query");
-            const oViewModel = this.getModel("viewModel");
-            const aItems = oViewModel.getProperty("/relatedItems");
-            
-            // If no query, show all items
-            if (!sQuery) {
-                oViewModel.setProperty("/filteredRelatedItems", aItems);
-                return;
-            }
-            
-            // Filter items
-            const sQueryLower = sQuery.toLowerCase();
-            const aFilteredItems = aItems.filter(item => {
-                // Search in all properties
-                return Object.values(item).some(value => {
-                    if (value === null || value === undefined) {
-                        return false;
-                    }
-                    
-                    return String(value).toLowerCase().includes(sQueryLower);
-                });
-            });
-            
-            oViewModel.setProperty("/filteredRelatedItems", aFilteredItems);
-        },
-        
-        /**
-         * Handler for "View Related" button press
-         */
-        onViewRelatedPress: function() {
-            // Scroll to related items section
-            const oObjectPageLayout = this.getView().byId("ObjectPageLayout");
-            const oSection = this.getView().byId("relatedItemsSection");
-            
-            if (oObjectPageLayout && oSection) {
-                oObjectPageLayout.scrollToSection(oSection.getId());
-            }
-        },
-        
-        /**
-         * Handler for "Export Details" button press
-         */
-        onExportDetailsPress: function() {
-            // Implementation for exporting details
-            this.showInformationMessage("Export functionality not implemented yet");
-        },
-        
-        /**
-         * Handler for edit button press
-         */
-        onEditPress: function() {
-            this.getModel("viewModel").setProperty("/editMode", true);
-        },
-        
-        /**
-         * Handler for save button press
-         */
         onSavePress: function() {
+            console.log("Save button pressed");
+            
             const oViewModel = this.getModel("viewModel");
             const sTableId = oViewModel.getProperty("/tableId");
+            const sEntityId = oViewModel.getProperty("/entityId");
             const oEntityData = oViewModel.getProperty("/entity");
             
             // Set busy state
             oViewModel.setProperty("/busy", true);
             
-            // Get metadata to determine primary key
+            // Validate the data
             this.getTableMetadata(sTableId).then((oMetadata) => {
                 const sPrimaryKey = oMetadata.primaryKey;
-                const sPrimaryKeyValue = oEntityData[sPrimaryKey];
                 
                 // Create a copy of the data without read-only fields
                 const oDataToUpdate = {};
                 
                 oMetadata.columns.forEach((oColumnMetadata) => {
-                    // Skip non-editable fields
-                    if (oColumnMetadata.editable === false) {
-                        return;
-                    }
-                    
-                    // Skip primary key
-                    if (oColumnMetadata.name === sPrimaryKey) {
-                        return;
-                    }
-                    
-                    // Skip relation objects
-                    if (oColumnMetadata.name.endsWith("_text") || oColumnMetadata.name.endsWith("_obj")) {
+                    // Skip non-editable fields and primary key
+                    if ((oColumnMetadata.editable === false && 
+                         oColumnMetadata.name !== sPrimaryKey) || 
+                        oColumnMetadata.name === sPrimaryKey) {
                         return;
                     }
                     
@@ -601,182 +757,85 @@ sap.ui.define([
                 this.getSupabaseClient()
                     .from(sTableId)
                     .update(oDataToUpdate)
-                    .eq(sPrimaryKey, sPrimaryKeyValue)
-                    .then(({ error }) => {
+                    .eq(sPrimaryKey, sEntityId)
+                    .then(({ data, error }) => {
+                        oViewModel.setProperty("/busy", false);
+                        
                         if (error) {
                             this.showErrorMessage("Error updating entity", error);
-                            oViewModel.setProperty("/busy", false);
                             return;
                         }
                         
-                        // Reload entity
-                        this._loadEntity(sTableId, sPrimaryKeyValue);
-                        
-                        // Exit edit mode
+                        // Reset edit mode
                         oViewModel.setProperty("/editMode", false);
+                        
+                        // Show success message  
                         this.showSuccessMessage("Entity updated successfully");
+                        
+                        // Reload entity to refresh data
+                        this._loadEntity(sTableId, sEntityId);
+                    })
+                    .catch(error => {
+                        console.error("Error in Supabase query:", error);
+                        this.showErrorMessage("Error updating entity: " + error.message);
+                        oViewModel.setProperty("/busy", false); 
                     });
+            }).catch(error => {
+                console.error("Error getting table metadata:", error);
+                this.showErrorMessage("Error getting table metadata: " + error.message);
+                oViewModel.setProperty("/busy", false);
             });
         },
         
-        /**
-         * Handler for cancel button press
-         */
         onCancelPress: function() {
-            // Exit edit mode and reload entity
+            console.log("Cancel button pressed");
+            
             const oViewModel = this.getModel("viewModel");
             const sTableId = oViewModel.getProperty("/tableId");
             const sEntityId = oViewModel.getProperty("/entityId");
             
+            // Reset edit mode
             oViewModel.setProperty("/editMode", false);
+            
+            // Reload the original entity data to discard changes  
             this._loadEntity(sTableId, sEntityId);
         },
-        
-        /**
-         * Handler for delete button press
-         */
-        onDeletePress: function() {
-            const oViewModel = this.getModel("viewModel");
-            const sTableId = oViewModel.getProperty("/tableId");
-            const sEntityId = oViewModel.getProperty("/entityId");
-            
-            // Confirm deletion
-            this.showConfirmationDialog(
-                "Are you sure you want to delete this entity?",
-                () => {
-                    // Get metadata to determine primary key
-                    this.getTableMetadata(sTableId).then((oMetadata) => {
-                        const sPrimaryKey = oMetadata.primaryKey;
-                        
-                        // Delete entity
-                        this.getSupabaseClient()
-                            .from(sTableId)
-                            .delete()
-                            .eq(sPrimaryKey, sEntityId)
-                            .then(({ error }) => {
-                                if (error) {
-                                    this.showErrorMessage("Error deleting entity", error);
-                                    return;
-                                }
-                                
-                                // Navigate back to list
-                                this.getRouter().navTo("entityList", {
-                                    table: sTableId
-                                });
-                                
-                                this.showSuccessMessage("Entity deleted successfully");
-                            });
-                    });
-                },
-                "Delete Confirmation"
-            );
-        },
-        
-        /**
-         * Handler for related item press
-         * @param {sap.ui.base.Event} oEvent The list item press event
-         */
-        onRelatedItemPress: function(oEvent) {
-            try {
-                const oItem = oEvent.getSource();
-                
-                // Get the binding context
-                const oContext = oItem.getBindingContext("viewModel");
-                if (!oContext) {
-                    console.error("No binding context found for related item");
-                    return;
-                }
-                
-                const oData = oContext.getObject();
-                if (!oData) {
-                    console.error("No data found in binding context for related item");
-                    return;
-                }
-                
-                const oViewModel = this.getModel("viewModel");
-                const sTableId = oViewModel.getProperty("/tableId");
-                
-                // Get metadata for the current table
-                this.getTableMetadata(sTableId).then((oMetadata) => {
-                    // Get the first relation
-                    if (!oMetadata.relations || oMetadata.relations.length === 0) {
-                        console.error("No relations defined in metadata");
-                        return;
-                    }
-                    
-                    const oRelation = oMetadata.relations[0];
-                    
-                    // Get metadata for related table
-                    this.getTableMetadata(oRelation.table).then((oRelatedMetadata) => {
-                        const sPrimaryKey = oRelatedMetadata.primaryKey;
-                        const sPrimaryKeyValue = oData[sPrimaryKey];
-                        
-                        if (sPrimaryKeyValue === undefined || sPrimaryKeyValue === null) {
-                            console.error("Primary key value not found in related item data", sPrimaryKey);
-                            return;
-                        }
-                        
-                        console.log("Navigating to related item:", {
-                            table: oRelation.table,
-                            id: sPrimaryKeyValue
-                        });
-                        
-                        // Navigate to detail page of related item
-                        this.getRouter().navTo("entityDetail", {
-                            table: oRelation.table,
-                            id: sPrimaryKeyValue
-                        });
-                    });
-                });
-            } catch (e) {
-                console.error("Error in related item press:", e);
-                this.showErrorMessage("Error navigating to related item: " + e.message);
-            }
-        },
-        
-        /**
-         * Handler for add related item button press
-         */
+
         onAddRelatedItemPress: function() {
             const oViewModel = this.getModel("viewModel");
             const sTableId = oViewModel.getProperty("/tableId");
+            const sEntityId = oViewModel.getProperty("/entityId");
             
             // Get metadata for the current table
             this.getTableMetadata(sTableId).then((oMetadata) => {
                 // Get the first relation
                 if (!oMetadata.relations || oMetadata.relations.length === 0) {
-                    this.showErrorMessage("No relations defined for this entity");
+                    console.error("No relations defined in metadata");
                     return;
                 }
                 
                 const oRelation = oMetadata.relations[0];
                 
-                // Navigate to create page for the related table
+                // Store parent information in session storage for use in create form
+                const oParentInfo = {
+                    parentTable: sTableId,
+                    parentId: sEntityId,
+                    foreignKey: oRelation.foreignKey
+                };
+                
+                sessionStorage.setItem("parentEntityInfo", JSON.stringify(oParentInfo));
+                
+                // Navigate to create page for related table
                 this.getRouter().navTo("entityCreate", {
                     table: oRelation.table
                 });
             });
         },
-        
-        /**
-         * Handler for edit related item button press
-         * @param {sap.ui.base.Event} oEvent The button press event
-         */
-        onEditRelatedItemPress: function(oEvent) {
-            // Get the list item from the button's parent
-            const oButton = oEvent.getSource();
-            const oListItem = oButton.getParent().getParent();
-            
-            // Get the binding context
-            const oContext = oListItem.getBindingContext("viewModel");
-            if (!oContext) {
-                console.error("No binding context found for related item");
-                return;
-            }
-            
-            const oData = oContext.getObject();
+
+        onAddRelatedItemPress: function() {
             const oViewModel = this.getModel("viewModel");
             const sTableId = oViewModel.getProperty("/tableId");
+            const sEntityId = oViewModel.getProperty("/entityId");
             
             // Get metadata for the current table
             this.getTableMetadata(sTableId).then((oMetadata) => {
@@ -788,116 +847,22 @@ sap.ui.define([
                 
                 const oRelation = oMetadata.relations[0];
                 
-                // Get metadata for related table
-                this.getTableMetadata(oRelation.table).then((oRelatedMetadata) => {
-                    const sPrimaryKey = oRelatedMetadata.primaryKey;
-                    const sPrimaryKeyValue = oData[sPrimaryKey];
-                    
-                    // Navigate to detail page of related item
-                    this.getRouter().navTo("entityDetail", {
-                        table: oRelation.table,
-                        id: sPrimaryKeyValue
-                    });
+                // Store parent information in session storage for use in create form
+                const oParentInfo = {
+                    parentTable: sTableId,
+                    parentId: sEntityId,
+                    foreignKey: oRelation.foreignKey
+                };
+                
+                sessionStorage.setItem("parentEntityInfo", JSON.stringify(oParentInfo));
+                
+                // Navigate to create page for related table
+                this.getRouter().navTo("entityCreate", {
+                    table: oRelation.table
                 });
             });
         },
-        
-        /**
-         * Handler for delete related item button press
-         * @param {sap.ui.base.Event} oEvent The button press event
-         */
-        onDeleteRelatedItemPress: function(oEvent) {
-            // Get the list item from the button's parent
-            const oButton = oEvent.getSource();
-            const oListItem = oButton.getParent().getParent();
-            
-            // Get the binding context
-            const oContext = oListItem.getBindingContext("viewModel");
-            if (!oContext) {
-                console.error("No binding context found for related item");
-                return;
-            }
-            
-            const oData = oContext.getObject();
-            const oViewModel = this.getModel("viewModel");
-            const sTableId = oViewModel.getProperty("/tableId");
-            
-            // Get metadata for the current table
-            this.getTableMetadata(sTableId).then((oMetadata) => {
-                // Get the first relation
-                if (!oMetadata.relations || oMetadata.relations.length === 0) {
-                    console.error("No relations defined in metadata");
-                    return;
-                }
-                
-                const oRelation = oMetadata.relations[0];
-                
-                // Get metadata for related table
-                this.getTableMetadata(oRelation.table).then((oRelatedMetadata) => {
-                    const sPrimaryKey = oRelatedMetadata.primaryKey;
-                    const sPrimaryKeyValue = oData[sPrimaryKey];
-                    
-                    // Confirm deletion
-                    this.showConfirmationDialog(
-                        "Are you sure you want to delete this related item?",
-                        () => {
-                            // Delete related item
-                            this.getSupabaseClient()
-                                .from(oRelation.table)
-                                .delete()
-                                .eq(sPrimaryKey, sPrimaryKeyValue)
-                                .then(({ error }) => {
-                                    if (error) {
-                                        this.showErrorMessage("Error deleting related item", error);
-                                        return;
-                                    }
-                                    
-                                    // Reload entity to refresh related items
-                                    this._loadEntity(sTableId, oViewModel.getProperty("/entityId"));
-                                    this.showSuccessMessage("Related item deleted successfully");
-                                });
-                        },
-                        "Delete Confirmation"
-                    );
-                });
-            });
-        },
-        /**
-         * Navigation handler
-         */
-        onNavBack: function() {
-            const sTableId = this.getModel("viewModel").getProperty("/tableId");
-            
-            // Navigate back to list
-            this.getRouter().navTo("entityList", {
-                table: sTableId
-            });
-        },
-
-        // Line 205 context (fix by removing the unused parameter):
-        getRelatedRecords: function(sTableId, sForeignKey, sPrimaryKeyValue) {
-            return new Promise((resolve, reject) => {
-                this.getSupabaseClient()
-                    .from(sTableId)
-                    .select('*')
-                    .eq(sForeignKey, sPrimaryKeyValue)
-                    .then(({ data, error }) => {
-                        if (error) {
-                            reject(error);
-                            return;
-                        }
-                        resolve(data || []);
-                    })
-                    .catch(error => {
-                        reject(error);
-                    });
-            });
-        }
-
-        
 
 
     });
-
-    
 });

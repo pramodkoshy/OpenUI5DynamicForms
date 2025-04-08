@@ -9,7 +9,10 @@
     <Page id="entityListPage" title="{viewModel>/tableName} List">
         <customHeader>
             <Toolbar>
-                <Button icon="sap-icon://nav-back" press=".onNavBack" />
+                <Button 
+                    id="navToggleButton" 
+                    icon="sap-icon://menu2" 
+                    press=".onToggleNav" />
                 <Title text="{viewModel>/tableName} List" level="H2" />
                 <ToolbarSpacer />
                 <Button icon="sap-icon://add" tooltip="Create New" press=".onCreatePress" />
@@ -25,7 +28,11 @@
                             <Title text="{viewModel>/tableName} Management" />
                         </f:heading>
                         <f:actions>
-                            <SearchField width="300px" placeholder="Search..." search=".onSearch" />
+                            <SearchField
+                                id="entitySearch"
+                                width="300px"
+                                search=".onSearch" 
+                                placeholder="Search..." />
                         </f:actions>
                     </f:DynamicPageTitle>
                 </f:title>
@@ -41,21 +48,19 @@
                         
                         <Table
                             id="entityTable"
+                            items="{viewModel>/items}"
                             growing="true"
                             growingThreshold="20"
-                            growingScrollToLoad="true"
-                            sticky="ColumnHeaders,HeaderToolbar"
-                            updateFinished=".onTableUpdateFinished">
+                            growingScrollToLoad="true">
                             
-                            <!-- The columns will be added dynamically in the controller -->
+                            <!-- Columns will be added dynamically in the controller -->
                             <columns>
                                 <!-- Dynamic columns -->
                             </columns>
                             
-                            <!-- Define a template for the rows that will be filled dynamically -->
                             <items>
                                 <ColumnListItem type="Navigation" press=".onItemPress">
-                                    <!-- The cells will be added dynamically in the controller -->
+                                    <!-- Cells will be added dynamically in the controller -->
                                 </ColumnListItem>
                             </items>
                         </Table>

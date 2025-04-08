@@ -1,9 +1,14 @@
+// In your Component.js
 sap.ui.define([
     "sap/ui/core/UIComponent",
     "sap/ui/Device",
     "./model/models"
 ], function(UIComponent, Device, models) {
     "use strict";
+
+    // Disable all flex-related settings before component is created
+    window["sap-ui-config"] = window["sap-ui-config"] || {};
+    window["sap-ui-config"].flexibilityServices = false;
 
     return UIComponent.extend("com.supabase.easyui5.Component", {
         metadata: {
@@ -15,12 +20,24 @@ sap.ui.define([
          * @public
          * @override
          */
+        // Modified init method for Component.js
+
+        /**
+         * The component is initialized by UI5 automatically during the startup of the app and calls the init method once.
+         * @public
+         * @override
+         */
+        // Modified init method for Component.js
+
         init: function() {
             // call the base component's init function
             UIComponent.prototype.init.apply(this, arguments);
 
             // create the device model
             this.setModel(models.createDeviceModel(), "device");
+            
+            // Initialize theme
+            this.initTheme();
 
             // Initialize Supabase client
             this.initSupabase();
@@ -83,6 +100,61 @@ sap.ui.define([
                 }
             }
             return this.contentDensityClass;
+        },
+
+        // In Component.js, add a method to retrieve the SplitApp control
+
+        /**
+         * Get the SplitApp control
+         * @returns {sap.m.SplitApp} The SplitApp control
+         * @public
+         */
+        getSplitApp: function() {
+            // Return the SplitApp instance
+            return this.getRootControl().byId("app");
+        },
+
+        // Add this code to the Component.js file in the init method, 
+        // after creating the device model but before initializing the router
+
+        /**
+         * Initialize theme from saved preference
+         * @private
+         */
+        initTheme: function() {
+            // Get theme from local storage
+            let sTheme;
+            try {
+                sTheme = localStorage.getItem("preferredTheme");
+            } catch (e) {
+                console.error("Error reading theme preference:", e);
+            }
+            
+            // If no theme is stored or the stored theme is invalid, use default
+            const aValidThemes = [
+                "sap_horizon",
+                "sap_horizon_dark", 
+                "sap_horizon_hcb", 
+                "sap_horizon_hcw"
+            ];
+            
+            if (!sTheme || aValidThemes.indexOf(sTheme) === -1) {
+                sTheme = "sap_horizon"; // Default theme
+            }
+            
+            // Apply the theme
+            sap.ui.getCore().applyTheme(sTheme);
+            
+            // Create settings model
+            const oSettingsModel = new sap.ui.model.json.JSONModel({
+                theme: sTheme
+            });
+            this.setModel(oSettingsModel, "settings");
+            
+            console.log("Theme initialized:", sTheme);
         }
+
+
+        
     });
 });

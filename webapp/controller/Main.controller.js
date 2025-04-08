@@ -427,3 +427,5 @@ sap.ui.define([
                 this._createCategoryCards();
             }
         }
+    });
+});

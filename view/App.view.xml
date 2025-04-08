@@ -2,8 +2,62 @@
     controllerName="com.supabase.easyui5.controller.App"
     xmlns="sap.m"
     xmlns:mvc="sap.ui.core.mvc"
+    xmlns:core="sap.ui.core"
     displayBlock="true">
-    <App id="app">
-        <!-- This is where pages will be placed by the router -->
-    </App>
+    
+    <Shell>
+        <SplitApp id="app" 
+            defaultTransitionNameDetail="slide" 
+            mode="ShowHideMode">
+            <masterPages>
+                <!-- This page will hold the navigation menu -->
+                <Page id="masterPage" title="Navigation" showHeader="true">
+                    <customHeader>
+                        <Toolbar class="sapContrastPlus sapMTBHeader-CTX">
+                            <Title text="Database Tables" level="H2" />
+                            <ToolbarSpacer/>
+                            <Button 
+                                id="collapseNavButton"
+                                icon="sap-icon://navigation-left-arrow" 
+                                tooltip="Hide Navigation" 
+                                press=".onCollapseNav"/>
+                        </Toolbar>
+                    </customHeader>
+                    <content>
+                        <!-- Navigation List that will be populated from the controller -->
+                        <List id="navigationList" 
+                            mode="SingleSelectMaster"
+                            selectionChange=".onNavListItemSelect">
+                            <items>
+                                <StandardListItem 
+                                    id="homeItem" 
+                                    title="Home" 
+                                    icon="sap-icon://home"
+                                    type="Navigation"
+                                    press=".onNavHome" />
+                                    
+                                <!-- These items will be populated dynamically in the controller -->
+                            </items>
+                        </List>
+                    </content>
+                    <footer>
+                        <Toolbar>
+                            <ToolbarSpacer/>
+                            <Button 
+                                icon="sap-icon://information" 
+                                tooltip="About" 
+                                press=".onShowAbout"/>
+                            <Button 
+                                icon="sap-icon://action-settings" 
+                                tooltip="Settings" 
+                                press=".onShowSettings"/>
+                        </Toolbar>
+                    </footer>
+                </Page>
+            </masterPages>
+            <detailPages>
+                <!-- Detail pages will be added by the router -->
+            </detailPages>
+        </SplitApp>
+    </Shell>
 </mvc:View>

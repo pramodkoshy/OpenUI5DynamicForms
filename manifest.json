@@ -39,12 +39,13 @@
             "id": "app"
         },
         "dependencies": {
-            "minUI5Version": "1.108.0",
+            "minUI5Version": "1.120.1",
             "libs": {
                 "sap.ui.core": {},
                 "sap.m": {},
                 "sap.ui.layout": {},
-                "sap.f": {}
+                "sap.f": {},
+                "sap.ui.mdc": {}  
             }
         },
         "contentDensities": {
@@ -62,7 +63,19 @@
             }
         },
         "resources": {
-            "css": []
+            "css": [
+                {
+                    "uri": "css/style.css"
+                }
+            ],
+            "js": [
+            {
+                "name": "com/supabase/easyui5/controller/EntityCreateForm.js"
+            },
+            {
+                "name": "com/supabase/easyui5/controller/EntityDetailForm.js"
+            }
+        ]
         },
         "routing": {
             "config": {
@@ -70,7 +83,7 @@
                 "viewType": "XML",
                 "viewPath": "com.supabase.easyui5.view",
                 "controlId": "app",
-                "controlAggregation": "pages",
+                "controlAggregation": "detailPages",
                 "transition": "slide",
                 "bypassed": {
                     "target": "notFound"

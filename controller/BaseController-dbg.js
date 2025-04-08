@@ -3,8 +3,11 @@ sap.ui.define([
     "sap/ui/core/UIComponent",
     "sap/ui/core/routing/History",
     "sap/m/MessageBox",
-    "sap/m/MessageToast"
-], function(Controller, UIComponent, History, MessageBox, MessageToast) {
+    "sap/m/MessageToast",
+    "sap/ui/mdc/condition/ConditionConverter",
+    "sap/ui/model/Filter",
+    "sap/ui/model/FilterOperator"
+], function(Controller, UIComponent, History, MessageBox, MessageToast, ConditionConverter, Filter, FilterOperator) {
     "use strict";
 
     return Controller.extend("com.supabase.easyui5.controller.BaseController", {
@@ -77,6 +80,16 @@ sap.ui.define([
         },
         
         /**
+         * Show an information message
+         * @param {string} sMessage The message text
+         */
+        showInformationMessage: function(sMessage) {
+            MessageBox.information(sMessage, {
+                styleClass: this.getOwnerComponent().getContentDensityClass()
+            });
+        },
+        
+        /**
          * Show an error message
          * @param {string} sMessage The error message
          * @param {Object} [oError] The error object
@@ -110,6 +123,36 @@ sap.ui.define([
                     }
                 }
             });
+        },
+        
+        /**
+         * Create a UI5 filter
+         * @param {string} sPath The property path
+         * @param {sap.ui.model.FilterOperator} sOperator The filter operator
+         * @param {any} vValue1 The first value to compare
+         * @param {any} [vValue2] The second value to compare (for between)
+         * @returns {sap.ui.model.Filter} The filter object
+         */
+        createFilter: function(sPath, sOperator, vValue1, vValue2) {
+            return new Filter(sPath, sOperator, vValue1, vValue2);
+        },
+        
+        /**
+         * Create a set of OR filters
+         * @param {sap.ui.model.Filter[]} aFilters Array of filters
+         * @returns {sap.ui.model.Filter} The combined filter
+         */
+        createORFilters: function(aFilters) {
+            return new Filter(aFilters, false);
+        },
+        
+        /**
+         * Create a set of AND filters
+         * @param {sap.ui.model.Filter[]} aFilters Array of filters
+         * @returns {sap.ui.model.Filter} The combined filter
+         */
+        createANDFilters: function(aFilters) {
+            return new Filter(aFilters, true);
         },
         
         /**
@@ -235,6 +278,86 @@ sap.ui.define([
             };
             
             return Promise.resolve(oMetadata[sTableName]);
+        },
+
+        /**
+         * Get the SplitApp control
+         * @returns {sap.m.SplitApp} The SplitApp control
+         */
+        getSplitApp: function() {
+            // First try the component's method
+            if (this.getOwnerComponent().getSplitApp) {
+                const oSplitApp = this.getOwnerComponent().getSplitApp();
+                if (oSplitApp) {
+                    return oSplitApp;
+                }
+            }
+            
+            // Try to get it from the component's root control
+            const oRootControl = this.getOwnerComponent().getAggregation("rootControl");
+            if (oRootControl) {
+                const oSplitApp = oRootControl.byId("app");
+                if (oSplitApp) {
+                    return oSplitApp;
+                }
+            }
+            
+            // Try to get it from the component view
+            const oComponentView = this.getOwnerComponent().getAggregation("rootControl");
+            if (oComponentView) {
+                return oComponentView.byId("app");
+            }
+            
+            // If all else fails, try to find it in the DOM
+            return sap.ui.getCore().byId("__component0---app");
+        },
+
+        // Add this function to the BaseController.js
+
+        /**
+         * Apply theme and save preference
+         * @param {string} sTheme The theme to apply
+         * @public
+         */
+        applyTheme: function(sTheme) {
+            // Validate theme
+            const aValidThemes = [
+                "sap_horizon",
+                "sap_horizon_dark", 
+                "sap_horizon_hcb", 
+                "sap_horizon_hcw"
+            ];
+            
+            if (aValidThemes.indexOf(sTheme) === -1) {
+                console.error("Invalid theme:", sTheme);
+                return;
+            }
+            
+            // Apply theme
+            sap.ui.getCore().applyTheme(sTheme);
+            
+            // Store preference in localStorage for persistence
+            try {
+                localStorage.setItem("preferredTheme", sTheme);
+                console.log("Theme preference saved:", sTheme);
+            } catch (e) {
+                console.error("Could not save theme preference:", e);
+            }
+            
+            // Create a settings model if it doesn't exist
+            let oComponent = this.getOwnerComponent();
+            if (!oComponent.getModel("settings")) {
+                oComponent.setModel(new sap.ui.model.json.JSONModel({
+                    theme: sTheme
+                }), "settings");
+            } else {
+                // Update the settings model
+                oComponent.getModel("settings").setProperty("/theme", sTheme);
+            }
+            
+            // Show confirmation
+            sap.m.MessageToast.show("Theme changed to " + sTheme.replace("sap_", "").replace("_", " "));
         }
+
     });
 });

@@ -22,8 +22,10 @@
 			id="sap-ui-bootstrap"
 			src="https://sdk.openui5.org/1.133.0/resources/sap-ui-core.js"
 			data-sap-ui-resourceroots='{
-				"com.supabase.easyui5": "./"
+				"com.supabase.easyui5": "./",
+				"com/supabase/easyui5": "./"
 			}'
+			data-sap-ui-libs="sap.m, sap.ui.core, sap.ui.layout"
 			data-sap-ui-theme="sap_horizon"
 			data-sap-ui-oninit="module:sap/ui/core/ComponentSupport"
 			data-sap-ui-async="true"
@@ -31,7 +33,19 @@
 			data-sap-ui-frameOptions="trusted"
 			data-sap-ui-xx-waitForTheme="true"
 			data-sap-ui-xx-supportedLanguages="en,de"
+			data-sap-ui-xx-componentPreload="off"
 		></script>
+
+		<!-- Explicitly add the Component.js file -->
+		<script>
+			// Manual loading - This ensures the file is loaded correctly
+			sap.ui.require([
+				'com/supabase/easyui5/Component',
+				'com/supabase/easyui5/controller/BaseController'
+			], function(Component, BaseController) {
+				console.log('Core modules pre-loaded successfully');
+			});
+		</script>
 	</head>
 
 	<body class="sapUiBody">

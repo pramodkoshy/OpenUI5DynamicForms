@@ -65,57 +65,102 @@ sap.ui.define([
             this._createCategoryCards();
         },
        /**
-         * Toggle navigation panel
+         * Toggle navigation panel - simplified direct access
          */
         onToggleNav: function() {
-            // Get SplitApp directly
-            let oSplitApp = sap.ui.getCore().byId("__component0---app--app");
-            
-            // If direct approach fails, try other methods
-            if (!oSplitApp) {
-                console.log("Direct SplitApp access failed, trying fallbacks");
-                // Try component
-                if (this.getOwnerComponent().getSplitApp) {
+            try {
+                // Get root component view
+                const oComponentContainer = sap.ui.getCore().byId("content");
+                let oSplitApp = null;
+                
+                // Try multiple ways to get the SplitApp
+                // 1. Direct method via component
+                if (this.getOwnerComponent() && this.getOwnerComponent().getSplitApp) {
                     oSplitApp = this.getOwnerComponent().getSplitApp();
                 }
                 
-                // Try root control
-                if (!oSplitApp && this.getOwnerComponent().getRootControl()) {
-                    oSplitApp = this.getOwnerComponent().getRootControl().byId("app");
+                // 2. Via component root control
+                if (!oSplitApp && this.getOwnerComponent() && this.getOwnerComponent().getRootControl) {
+                    const oRootControl = this.getOwnerComponent().getRootControl();
+                    if (oRootControl) {
+                        oSplitApp = oRootControl.byId("app");
+                    }
                 }
-            }
-            
-            // Get app view model (either from component or directly)
-            let oAppViewModel = this.getOwnerComponent().getModel("appView");
-            if (!oAppViewModel) {
-                // Try getting it from the component's root view
-                const oRootControl = this.getOwnerComponent().getRootControl();
-                if (oRootControl && oRootControl.getModel) {
-                    oAppViewModel = oRootControl.getModel("appView");
+                
+                // 3. Direct access via known ID
+                if (!oSplitApp) {
+                    oSplitApp = sap.ui.getCore().byId("__component0---app");
+                    if (!oSplitApp) {
+                        oSplitApp = sap.ui.getCore().byId("__xmlview0--app");
+                    }
                 }
-            }
-            
-            // Get toggle button 
-            const oToggleButton = this.getView().byId("navToggleButton");
-            
-            console.log("Detail toggle nav button pressed");
-            console.log("SplitApp reference:", oSplitApp);
-            console.log("AppViewModel:", oAppViewModel);
-            
-            if (oSplitApp) {
-                // Get current state from model or assume it's hidden in detail view
-                const bExpanded = oAppViewModel ? oAppViewModel.getProperty("/navExpanded") : false;
                 
-                console.log("Current nav state:", bExpanded ? "expanded" : "collapsed");
+                // 4. Find by type
+                if (!oSplitApp) {
+                    const aSplitApps = sap.ui.getCore().byFieldGroupId("").filter(function(oControl) {
+                        return oControl instanceof sap.m.SplitApp;
+                    });
+                    
+                    if (aSplitApps.length > 0) {
+                        oSplitApp = aSplitApps[0];
+                    }
+                }
                 
-                // Set the mode to ShowHideMode to ensure the master can be shown
-                oSplitApp.setMode("ShowHideMode");
+                if (!oSplitApp) {
+                    console.error("SplitApp control not found!");
+                    return;
+                }
                 
-                // Use timeout to ensure mode is applied
-                setTimeout(function() {
-                    // Show the master panel
-                    console.log("Showing master panel");
-                    oSplitApp.showMaster();
+                // Get app view model
+                const oAppViewModel = this.getOwnerComponent().getModel("appView");
+                
+                // If no model found, create one
+                if (!oAppViewModel) {
+                    console.error("AppView model not found!");
+                    return;
+                }
+                
+                // Get current expansion state
+                const bExpanded = oAppViewModel.getProperty("/navExpanded");
+                
+                // Get toggle button
+                const oToggleButton = this.getView().byId("navToggleButton");
+                
+                console.log("Home toggle nav button pressed. Current state:", bExpanded ? "expanded" : "collapsed");
+                
+                // Toggle state
+                if (bExpanded) {
+                    // For mobile, we need to use specific approach
+                    if (sap.ui.Device.system.phone) {
+                        // On phone, we're in popover mode, so just hide master
+                        oSplitApp.hideMaster();
+                    } else {
+                        // On tablet/desktop, ensure we're in HideMode or ShowHideMode
+                        const sCurrentMode = oSplitApp.getMode();
+                        if (sCurrentMode !== "HideMode" && sCurrentMode !== "ShowHideMode") {
+                            oSplitApp.setMode("ShowHideMode");
+                        }
+                        oSplitApp.hideMaster();
+                    }
+                    
+                    // Update button if available
+                    if (oToggleButton) {
+                        oToggleButton.setIcon("sap-icon://menu2");
+                        oToggleButton.setTooltip("Show Navigation");
+                    }
+                    
+                    // Update model state
+                    oAppViewModel.setProperty("/navExpanded", false);
+                } else {
+                    // For mobile, we need to use specific approach
+                    if (sap.ui.Device.system.phone) {
+                        // On phone, we're in popover mode, so show master
+                        oSplitApp.showMaster();
+                    } else {
+                        // On tablet/desktop, ensure we're in ShowHideMode
+                        oSplitApp.setMode("ShowHideMode");
+                        oSplitApp.showMaster();
+                    }
                     
                     // Update button if available
                     if (oToggleButton) {
@@ -123,13 +168,11 @@ sap.ui.define([
                         oToggleButton.setTooltip("Hide Navigation");
                     }
                     
-                    // Update model if available
-                    if (oAppViewModel) {
-                        oAppViewModel.setProperty("/navExpanded", true);
-                    }
-                }, 0);
-            } else {
-                console.error("Could not find SplitApp control");
+                    // Update model state
+                    oAppViewModel.setProperty("/navExpanded", true);
+                }
+            } catch (error) {
+                console.error("Error in menu toggle:", error);
             }
         },
 

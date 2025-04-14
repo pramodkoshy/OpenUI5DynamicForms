@@ -8,7 +8,9 @@
     <Shell>
         <SplitApp id="app" 
             defaultTransitionNameDetail="slide" 
-            mode="ShowHideMode">
+            mode="ShowHideMode"
+            afterMasterOpen=".onAfterMasterOpen"
+            afterMasterClose=".onAfterMasterClose">
             <masterPages>
                 <!-- This page will hold the navigation menu -->
                 <Page id="masterPage" title="Navigation" showHeader="true">

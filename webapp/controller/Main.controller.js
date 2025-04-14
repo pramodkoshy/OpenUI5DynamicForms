@@ -29,7 +29,7 @@ sap.ui.define([
 ) {
     "use strict";
 
-    return BaseController.extend("com.supabase.easyui5.controller.Home", {
+    return BaseController.extend("com.supabase.easyui5.controller.Main", {
         
         onInit: function() {
             // For debugging, create a local model if the tables model isn't available

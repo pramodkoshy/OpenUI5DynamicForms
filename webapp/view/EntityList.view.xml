@@ -51,7 +51,31 @@
                             items="{viewModel>/items}"
                             growing="true"
                             growingThreshold="20"
-                            growingScrollToLoad="true">
+                            growingScrollToLoad="true"
+                            fixedLayout="false"
+                            alternateRowColors="true"
+                            class="sapUiResponsiveMargin"
+                            sticky="ColumnHeaders,HeaderToolbar">
+                            
+                            <headerToolbar>
+                                <Toolbar>
+                                    <Title text="{viewModel>/tableName} List" level="H2"/>
+                                    <ToolbarSpacer/>
+                                    <SearchField 
+                                        width="30%" 
+                                        search=".onSearch" 
+                                        placeholder="Search..."/>
+                                    <Button 
+                                        text="Create New" 
+                                        icon="sap-icon://add" 
+                                        press=".onCreatePress" 
+                                        type="Emphasized"/>
+                                    <Button 
+                                        icon="sap-icon://refresh" 
+                                        tooltip="Refresh Data" 
+                                        press=".onRefreshPress" />
+                                </Toolbar>
+                            </headerToolbar>
                             
                             <!-- Columns will be added dynamically in the controller -->
                             <columns>

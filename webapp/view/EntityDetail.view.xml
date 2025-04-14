@@ -48,11 +48,7 @@
                                 text="Edit" 
                                 icon="sap-icon://edit" 
                                 press=".onEditPress" 
-                                visible="{= !${viewModel>/editMode} }"
-                                afterRendering="function(oEvent) {
-                                    console.log('Edit Button Rendered');
-                                    console.log('View Model Edit Mode:', this.getModel('viewModel').getProperty('/editMode'));
-                                }"/>
+                                visible="{= !${viewModel>/editMode} }"/>
                             <Button 
                                 type="Accept" 
                                 text="Save" 
@@ -153,15 +149,16 @@
                         </uxap:subSections>
                     </uxap:ObjectPageSection>
 
-                    <!-- Related Items Section -->
-                    <uxap:ObjectPageSection title="Related Items" id="relatedItemsSection" visible="{= ${viewModel>/relatedItems/length} > 0 }">
+                    <!-- Related Items Section - ALWAYS visible -->
+                    <uxap:ObjectPageSection title="Related Items" id="relatedItemsSection" visible="true">
                         <uxap:subSections>
                             <uxap:ObjectPageSubSection>
                                 <uxap:blocks>
                                     <VBox>
+
+                                        <!-- Modified Table with Direct Button Bindings -->
                                         <Table
                                             id="relatedItemsTable"
-                                            items="{viewModel>/filteredRelatedItems}"
                                             growing="true"
                                             growingThreshold="10"
                                             width="100%"
@@ -183,17 +180,43 @@
                                                 </Toolbar>
                                             </headerToolbar>
                                             
-                                            <!-- Columns will be added dynamically by the controller -->
                                             <columns>
-                                                <!-- Dynamic columns -->
+                                                <!-- Columns will be defined dynamically -->
                                             </columns>
                                             
                                             <items>
-                                                <ColumnListItem type="Navigation" press=".onRelatedItemPress">
-                                                    <!-- Cells will be added dynamically in the controller -->
+                                                <ColumnListItem id="relatedItemRow" type="Inactive">
+                                                    <!-- Cells will be defined dynamically -->
                                                 </ColumnListItem>
                                             </items>
+                                            
+                                            <noData>
+                                                <FlexBox 
+                                                    alignItems="Center" 
+                                                    justifyContent="Center" 
+                                                    direction="Column"
+                                                    class="sapUiMediumMargin">
+                                                    <core:Icon 
+                                                        src="sap-icon://table" 
+                                                        size="3rem" 
+                                                        class="sapUiMediumMarginBottom" />
+                                                    <Text 
+                                                        text="No related items found." 
+                                                        class="sapUiTinyMarginBottom"/>
+                                                    <Button 
+                                                        text="Add New Item" 
+                                                        press=".onAddRelatedItemPress" 
+                                                        type="Emphasized"/>
+                                                </FlexBox>
+                                            </noData>
                                         </Table>
+                                        <MessageStrip
+                                            text="This entity cannot be deleted while related items exist"
+                                            type="Warning"
+                                            showIcon="true"
+                                            visible="{= ${viewModel>/relatedItems}.length > 0 }"
+                                            class="sapUiSmallMarginTop">
+                                        </MessageStrip>
                                     </VBox>
                                 </uxap:blocks>
                             </uxap:ObjectPageSubSection>

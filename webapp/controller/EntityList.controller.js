@@ -27,57 +27,102 @@ sap.ui.define([
         },
         
        /**
-         * Toggle navigation panel
+         * Toggle navigation panel - simplified direct access
          */
         onToggleNav: function() {
-            // Get SplitApp directly
-            let oSplitApp = sap.ui.getCore().byId("__component0---app--app");
-            
-            // If direct approach fails, try other methods
-            if (!oSplitApp) {
-                console.log("Direct SplitApp access failed, trying fallbacks");
-                // Try component
-                if (this.getOwnerComponent().getSplitApp) {
+            try {
+                // Get root component view
+                const oComponentContainer = sap.ui.getCore().byId("content");
+                let oSplitApp = null;
+                
+                // Try multiple ways to get the SplitApp
+                // 1. Direct method via component
+                if (this.getOwnerComponent() && this.getOwnerComponent().getSplitApp) {
                     oSplitApp = this.getOwnerComponent().getSplitApp();
                 }
                 
-                // Try root control
-                if (!oSplitApp && this.getOwnerComponent().getRootControl()) {
-                    oSplitApp = this.getOwnerComponent().getRootControl().byId("app");
+                // 2. Via component root control
+                if (!oSplitApp && this.getOwnerComponent() && this.getOwnerComponent().getRootControl) {
+                    const oRootControl = this.getOwnerComponent().getRootControl();
+                    if (oRootControl) {
+                        oSplitApp = oRootControl.byId("app");
+                    }
                 }
-            }
-            
-            // Get app view model (either from component or directly)
-            let oAppViewModel = this.getOwnerComponent().getModel("appView");
-            if (!oAppViewModel) {
-                // Try getting it from the component's root view
-                const oRootControl = this.getOwnerComponent().getRootControl();
-                if (oRootControl && oRootControl.getModel) {
-                    oAppViewModel = oRootControl.getModel("appView");
+                
+                // 3. Direct access via known ID
+                if (!oSplitApp) {
+                    oSplitApp = sap.ui.getCore().byId("__component0---app");
+                    if (!oSplitApp) {
+                        oSplitApp = sap.ui.getCore().byId("__xmlview0--app");
+                    }
                 }
-            }
-            
-            // Get toggle button 
-            const oToggleButton = this.getView().byId("navToggleButton");
-            
-            console.log("Detail toggle nav button pressed");
-            console.log("SplitApp reference:", oSplitApp);
-            console.log("AppViewModel:", oAppViewModel);
-            
-            if (oSplitApp) {
-                // Get current state from model or assume it's hidden in detail view
-                const bExpanded = oAppViewModel ? oAppViewModel.getProperty("/navExpanded") : false;
                 
-                console.log("Current nav state:", bExpanded ? "expanded" : "collapsed");
+                // 4. Find by type
+                if (!oSplitApp) {
+                    const aSplitApps = sap.ui.getCore().byFieldGroupId("").filter(function(oControl) {
+                        return oControl instanceof sap.m.SplitApp;
+                    });
+                    
+                    if (aSplitApps.length > 0) {
+                        oSplitApp = aSplitApps[0];
+                    }
+                }
                 
-                // Set the mode to ShowHideMode to ensure the master can be shown
-                oSplitApp.setMode("ShowHideMode");
+                if (!oSplitApp) {
+                    console.error("SplitApp control not found!");
+                    return;
+                }
                 
-                // Use timeout to ensure mode is applied
-                setTimeout(function() {
-                    // Show the master panel
-                    console.log("Showing master panel");
-                    oSplitApp.showMaster();
+                // Get app view model
+                const oAppViewModel = this.getOwnerComponent().getModel("appView");
+                
+                // If no model found, create one
+                if (!oAppViewModel) {
+                    console.error("AppView model not found!");
+                    return;
+                }
+                
+                // Get current expansion state
+                const bExpanded = oAppViewModel.getProperty("/navExpanded");
+                
+                // Get toggle button
+                const oToggleButton = this.getView().byId("navToggleButton");
+                
+                console.log("Entity List toggle nav button pressed. Current state:", bExpanded ? "expanded" : "collapsed");
+                
+                // Toggle state
+                if (bExpanded) {
+                    // For mobile, we need to use specific approach
+                    if (sap.ui.Device.system.phone) {
+                        // On phone, we're in popover mode, so just hide master
+                        oSplitApp.hideMaster();
+                    } else {
+                        // On tablet/desktop, ensure we're in HideMode or ShowHideMode
+                        const sCurrentMode = oSplitApp.getMode();
+                        if (sCurrentMode !== "HideMode" && sCurrentMode !== "ShowHideMode") {
+                            oSplitApp.setMode("ShowHideMode");
+                        }
+                        oSplitApp.hideMaster();
+                    }
+                    
+                    // Update button if available
+                    if (oToggleButton) {
+                        oToggleButton.setIcon("sap-icon://menu2");
+                        oToggleButton.setTooltip("Show Navigation");
+                    }
+                    
+                    // Update model state
+                    oAppViewModel.setProperty("/navExpanded", false);
+                } else {
+                    // For mobile, we need to use specific approach
+                    if (sap.ui.Device.system.phone) {
+                        // On phone, we're in popover mode, so show master
+                        oSplitApp.showMaster();
+                    } else {
+                        // On tablet/desktop, ensure we're in ShowHideMode
+                        oSplitApp.setMode("ShowHideMode");
+                        oSplitApp.showMaster();
+                    }
                     
                     // Update button if available
                     if (oToggleButton) {
@@ -85,13 +130,11 @@ sap.ui.define([
                         oToggleButton.setTooltip("Hide Navigation");
                     }
                     
-                    // Update model if available
-                    if (oAppViewModel) {
-                        oAppViewModel.setProperty("/navExpanded", true);
-                    }
-                }, 0);
-            } else {
-                console.error("Could not find SplitApp control");
+                    // Update model state
+                    oAppViewModel.setProperty("/navExpanded", true);
+                }
+            } catch (error) {
+                console.error("Error in menu toggle:", error);
             }
         },
         /**
@@ -152,22 +195,61 @@ sap.ui.define([
             // Track visible columns for reference
             this._visibleColumns = [];
             
+            // Filter for visible columns and take only the first 5 (or fewer if there aren't 5)
+            const aVisibleColumns = oMetadata.columns
+                .filter(col => col.visible)
+                .slice(0, 5);
+            
             // Add columns and cells based on metadata
-            oMetadata.columns.forEach((oColumnMetadata) => {
-                // Skip columns that are not visible in list
-                if (!oColumnMetadata.visible) {
-                    return;
-                }
-                
+            aVisibleColumns.forEach((oColumnMetadata, index) => {
                 // Store visible column
                 this._visibleColumns.push(oColumnMetadata);
                 
-                // Create column
-                const oColumn = new Column({
-                    header: new Label({
-                        text: oColumnMetadata.label
+                // Set column width based on data type
+                let sWidth;
+                
+                switch (oColumnMetadata.type) {
+                    case "boolean":
+                        sWidth = "8rem";
+                        break;
+                    case "date":
+                        sWidth = "12rem";
+                        break;
+                    case "number":
+                    case "integer":
+                        sWidth = "10rem";
+                        break;
+                    case "email":
+                    case "url":
+                        sWidth = "18rem";
+                        break;
+                    case "relation":
+                        sWidth = "15rem";
+                        break;
+                    default:
+                        // For the first columns, give them more space
+                        if (index === 0) {
+                            sWidth = "18rem"; // Primary ID column
+                        } else if (index === 1) {
+                            sWidth = "20rem"; // Name/title column
+                        } else if (index === 2) {
+                            sWidth = "20rem"; // Description column
+                        } else {
+                            sWidth = "15rem"; // Other columns
+                        }
+                }
+                
+                // Create column with appropriate width
+                const oColumn = new sap.m.Column({
+                    header: new sap.m.Label({
+                        text: oColumnMetadata.label,
+                        design: "Bold"
                     }),
-                    width: oColumnMetadata.type === "date" ? "12rem" : undefined
+                    width: sWidth,
+                    minScreenWidth: "Tablet",
+                    demandPopin: true,
+                    popinDisplay: "Inline",
+                    hAlign: oColumnMetadata.type === "number" || oColumnMetadata.type === "integer" ? "End" : "Begin"
                 });
                 
                 oTable.addColumn(oColumn);
@@ -177,7 +259,7 @@ sap.ui.define([
                 
                 switch (oColumnMetadata.type) {
                     case "date":
-                        oCell = new Text({
+                        oCell = new sap.m.Text({
                             text: {
                                 path: "viewModel>" + oColumnMetadata.name,
                                 formatter: function(value) {
@@ -186,31 +268,51 @@ sap.ui.define([
                                     }
                                     return new Date(value).toLocaleDateString();
                                 }
-                            }
+                            },
+                            wrapping: false
                         });
                         break;
                     case "boolean":
-                        oCell = new Text({
+                        oCell = new sap.m.Text({
                             text: {
                                 path: "viewModel>" + oColumnMetadata.name,
                                 formatter: function(value) {
                                     return value ? "Yes" : "No";
                                 }
-                            }
+                            },
+                            wrapping: false
                         });
                         break;
                     case "relation":
-                        oCell = new Text({
+                        oCell = new sap.m.Text({
                             text: {
                                 path: "viewModel>" + oColumnMetadata.name + "_text"
-                            }
+                            },
+                            wrapping: false
+                        });
+                        break;
+                    case "number":
+                        oCell = new sap.m.Text({
+                            text: {
+                                path: "viewModel>" + oColumnMetadata.name,
+                                formatter: function(value) {
+                                    if (value === undefined || value === null) return "";
+                                    return parseFloat(value).toFixed(2);
+                                }
+                            },
+                            wrapping: false
                         });
                         break;
                     default:
-                        oCell = new Text({
-                            text: "{viewModel>" + oColumnMetadata.name + "}"
+                        oCell = new sap.m.Text({
+                            text: "{viewModel>" + oColumnMetadata.name + "}",
+                            wrapping: false,
+                            maxLines: 2
                         });
                 }
+                
+                // Apply common styling to all cells
+                oCell.addStyleClass("sapUiTinyMarginBeginEnd");
                 
                 oTemplate.addCell(oCell);
             });
@@ -220,6 +322,14 @@ sap.ui.define([
                 path: "viewModel>/items",
                 template: oTemplate
             });
+            
+            // Make sure table has these settings for better display
+            oTable.setFixedLayout(false);  // Allow the table to adjust column widths
+            oTable.setAlternateRowColors(true);  // Improve readability with alternating row colors
+            oTable.setPopinLayout("Block");  // Better layout for responsive design
+            
+            // Add CSS class to the table
+            oTable.addStyleClass("sapUiResponsiveMargin");
         },
         
         /**
@@ -314,16 +424,40 @@ sap.ui.define([
             
             // Get the primary key from the metadata
             this.getTableMetadata(sTableId).then((oMetadata) => {
-                const sPrimaryKey = oMetadata.primaryKey;
+                const sPrimaryKey = oMetadata.primaryKey || `${sTableId}_id`;
+                console.log("Primary key field:", sPrimaryKey);
+                console.log("Item data keys:", Object.keys(oItemData));
+                
+                // Get the primary key value
                 const sPrimaryKeyValue = oItemData[sPrimaryKey];
+                
+                if (sPrimaryKeyValue === undefined) {
+                    console.error("Primary key value is undefined. Cannot navigate.");
+                    return;
+                }
                 
                 console.log("Navigating to detail with ID:", sPrimaryKeyValue);
                 
-                // Navigate to the detail view
-                this.getRouter().navTo("entityDetail", {
-                    table: sTableId,
-                    id: sPrimaryKeyValue
-                });
+                // Navigate to the detail view - ADD DEBUG HERE
+                try {
+                    const oRouter = this.getRouter();
+                    console.log("Router object:", oRouter);
+                    
+                    // Log the route info
+                    console.log("Route params:", {
+                        routeName: "entityDetail", 
+                        params: {table: sTableId, id: sPrimaryKeyValue}
+                    });
+                    
+                    oRouter.navTo("entityDetail", {
+                        table: sTableId,
+                        id: sPrimaryKeyValue
+                    }, false);  // Added false to prevent history manipulation issues
+                    
+                    console.log("Navigation call completed");
+                } catch (oError) {
+                    console.error("Navigation error:", oError);
+                }
             }).catch(error => {
                 console.error("Error getting metadata for navigation:", error);
             });

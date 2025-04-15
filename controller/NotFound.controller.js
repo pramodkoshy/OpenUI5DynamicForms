@@ -1,0 +1,2 @@
+sap.ui.define(["com/supabase/easyui5/controller/BaseController"],function(e){"use strict";return e.extend("com.supabase.easyui5.controller.NotFound",{onNavBack:function(){this.getRouter().navTo("home")}})});
+//# sourceMappingURL=NotFound.controller.js.map

@@ -1,0 +1,111 @@
+<mvc:View
+    controllerName="com.supabase.easyui5.controller.Home"
+    xmlns:mvc="sap.ui.core.mvc"
+    xmlns="sap.m"
+    xmlns:f="sap.f"
+    xmlns:layout="sap.ui.layout"
+    xmlns:grid="sap.ui.layout.cssgrid"
+    xmlns:core="sap.ui.core"
+    displayBlock="true">
+    
+    <Page id="homePage" title="Dashboard" showHeader="true" class="sapUiNoContentPadding">
+        <customHeader>
+            <Toolbar>
+                <Button 
+                    id="navToggleButton" 
+                    icon="sap-icon://navigation-right-arrow" 
+                    press=".onToggleNav"
+                    tooltip="Show Navigation" />
+                <Title text="Dashboard" level="H2"/>
+                <ToolbarSpacer />
+                <SearchField 
+                    id="searchField"
+                    width="30%" 
+                    placeholder="Search tables..." 
+                    search=".onSearch" />
+            </Toolbar>
+        </customHeader>
+        
+        <landmarkInfo>
+            <PageAccessibleLandmarkInfo
+                rootRole="Region"
+                rootLabel="Home"
+                contentRole="Main"
+                contentLabel="Home Content"
+                headerRole="Banner"
+                headerLabel="Banner"/>
+        </landmarkInfo>
+        
+        <content>
+            <!-- Welcome Section -->
+            <VBox class="sapUiMediumMargin sapUiNoMarginTop sapUiNoMarginBottom">
+                <HBox justifyContent="SpaceBetween" alignItems="Center" class="sapUiMediumMarginTop sapUiMediumMarginBottom">
+                    <Title text="Welcome to Supabase Data Management" level="H1" titleStyle="H1" class="sapUiNoMarginTop" />
+                </HBox>
+                <Text text="Manage your data seamlessly with our powerful Supabase integration" class="sapUiTinyMarginBottom" />
+            </VBox>
+
+            <!-- Main Content - Categories -->
+            <IconTabBar
+                id="idIconTabBar"
+                select=".onTabSelect"
+                class="sapUiResponsiveContentPadding sapUiNoMarginTop"
+                headerMode="Inline"
+                backgroundDesign="Transparent"
+                expandable="false">
+                <items>
+                    <IconTabFilter
+                        key="all"
+                        text="All Categories"
+                        icon="sap-icon://home">
+                        
+                        <!-- Data Categories using Responsive Layout Grid -->
+                        <layout:Grid
+                            id="categoryGrid"
+                            defaultSpan="XL3 L4 M6 S12"
+                            hSpacing="1"
+                            vSpacing="1"
+                            class="sapUiSmallMarginTop">
+                            
+                            <!-- Grid items for each table -->
+                            <layout:content>
+                                <!-- We'll add items dynamically in the controller -->
+                            </layout:content>
+                        </layout:Grid>
+                        
+                    </IconTabFilter>
+                    
+                    <!-- Individual Category Tabs -->
+                    <IconTabFilter
+                        key="suppliers"
+                        text="Suppliers"
+                        icon="sap-icon://supplier">
+                        <VBox class="sapUiMediumMargin">
+                            <Title text="Supplier Management" level="H2" class="sapUiMediumMarginBottom" />
+                            <Text text="Manage your suppliers and their contact information." class="sapUiSmallMarginBottom" />
+                            <Button 
+                                text="Open Suppliers" 
+                                type="Emphasized" 
+                                press=".onCategoryPress" 
+                                class="sapUiSmallMarginTop">
+                                <customData>
+                                    <core:CustomData key="table" value="suppliers" />
+                                </customData>
+                            </Button>
+                        </VBox>
+                    </IconTabFilter>
+                    
+                    <!-- Other tabs remain the same -->
+                </items>
+            </IconTabBar>
+        </content>
+        
+        <footer>
+            <Toolbar>
+                <ToolbarSpacer/>
+                <Text text="Connected to Supabase" />
+                <ToolbarSpacer/>
+            </Toolbar>
+        </footer>
+    </Page>
+</mvc:View>

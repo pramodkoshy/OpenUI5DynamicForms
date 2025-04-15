@@ -1,0 +1,2 @@
+sap.ui.define([],function(){"use strict";sap.ui.require.predefine("sap/ui/fl/FlexConfiguration",["sap/ui/fl/registry/Settings"],function(i){return{getFlexibilityServices:function(){return false},isFlexibilityAdaptationEnabled:function(){return false},isFlexibilityEnabled:function(){return false}}});return{}});
+//# sourceMappingURL=flexibilityServices-none.js.map

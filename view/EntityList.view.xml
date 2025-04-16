@@ -4,6 +4,9 @@
     xmlns="sap.m"
     xmlns:f="sap.f"
     xmlns:core="sap.ui.core"
+    xmlns:fb="sap.ui.comp.filterbar"
+    xmlns:form="sap.ui.layout.form"
+    xmlns:cd="http://schemas.sap.com/sapui5/extension/sap.ui.core.CustomData/1"
     displayBlock="true">
     
     <Page id="entityListPage" title="{viewModel>/tableName} List">
@@ -21,30 +24,91 @@
         </customHeader>
         
         <content>
-            <f:DynamicPage>
+            <f:DynamicPage headerExpanded="false">
                 <f:title>
                     <f:DynamicPageTitle>
                         <f:heading>
                             <Title text="{viewModel>/tableName} Management" />
                         </f:heading>
                         <f:actions>
-                            <SearchField
-                                id="entitySearch"
-                                width="300px"
-                                search=".onSearch" 
-                                placeholder="Search..." />
+                            <!-- Search icon as dropdown trigger -->
+                            <Button 
+                                icon="sap-icon://search" 
+                                text="Server Search"
+                                tooltip="Expand to search on server" 
+                                press=".onServerSearchPress" />
                         </f:actions>
                     </f:DynamicPageTitle>
                 </f:title>
                 
+                <f:header>
+                    <f:DynamicPageHeader pinnable="true">
+                        <f:content>
+                            <VBox class="sapUiSmallMargin">
+                                <HBox alignItems="Center" class="sapUiTinyMarginBottom">
+                                    <Label text="Advanced Search" class="sapUiSmallMarginEnd" design="Bold" />
+                                    <ToolbarSpacer />
+                                    <Button 
+                                        text="Search" 
+                                        press=".onAdvancedSearch" 
+                                        type="Emphasized" 
+                                        class="sapUiTinyMarginBegin" />
+                                    <Button 
+                                        text="Reset" 
+                                        press=".onResetSearch" 
+                                        class="sapUiTinyMarginBegin" />
+                                </HBox>
+                                
+                                <form:SimpleForm 
+                                    id="searchForm"
+                                    layout="ResponsiveGridLayout"
+                                    editable="true"
+                                    labelSpanXL="4"
+                                    labelSpanL="4"
+                                    labelSpanM="4"
+                                    labelSpanS="12"
+                                    adjustLabelSpan="false"
+                                    emptySpanXL="0"
+                                    emptySpanL="0"
+                                    emptySpanM="0"
+                                    emptySpanS="0"
+                                    columnsXL="2"
+                                    columnsL="2"
+                                    columnsM="1">
+                                    
+                                    <!-- Search fields will be added dynamically based on table columns -->
+                                    
+                                </form:SimpleForm>
+                            </VBox>
+                        </f:content>
+                    </f:DynamicPageHeader>
+                </f:header>
+                
                 <f:content>
                     <VBox class="sapUiSmallMargin">
+                       
+                        
                         <MessageStrip
                             text="Click on any row to view details"
                             type="Information"
                             showIcon="true"
                             class="sapUiSmallMarginBottom">
                         </MessageStrip>
+                        
+                        <HBox justifyContent="SpaceBetween" alignItems="Center" class="sapUiSmallMarginBottom">
+                            <Text id="tableCountText" text="No items" />
+                            <SearchField
+                                id="quickSearch"
+                                width="300px"
+                                search=".onQuickSearch" 
+                                placeholder="Quick Search..." />
+
+                             <Button 
+                                text="Columns" 
+                                icon="sap-icon://column-chart-dual-axis" 
+                                press=".onColumnsButtonPress" 
+                                tooltip="Select Columns" />
+                        </HBox>
                         
                         <Table
                             id="entityTable"
@@ -62,6 +126,7 @@
                                     <Title text="{viewModel>/tableName} List" level="H2"/>
                                     <ToolbarSpacer/>
                                     <SearchField 
+                                        id="tableSearch"
                                         width="30%" 
                                         search=".onSearch" 
                                         placeholder="Search..."/>
@@ -95,9 +160,9 @@
         
         <footer>
             <Toolbar>
-                <Text id="tableCountText" text="No items" />
+                <Text text="{viewModel>/filterInfo}" class="sapUiSmallMarginBegin" />
                 <ToolbarSpacer />
-                <Button icon="sap-icon://delete" text="Delete Selected" press=".onDeletePress" enabled="false" visible="false" id="deleteButton" />
+                <Button icon="sap-icon://action-settings" text="Export" press=".onExportPress" />
             </Toolbar>
         </footer>
     </Page>

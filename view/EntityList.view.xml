@@ -24,7 +24,7 @@
         </customHeader>
         
         <content>
-            <f:DynamicPage headerExpanded="false">
+            <f:DynamicPage id="dynamicPageId" headerExpanded="false" toggleHeaderOnTitleClick="true">
                 <f:title>
                     <f:DynamicPageTitle>
                         <f:heading>
@@ -87,7 +87,6 @@
                 <f:content>
                     <VBox class="sapUiSmallMargin">
                        
-                        
                         <MessageStrip
                             text="Click on any row to view details"
                             type="Information"
@@ -97,62 +96,59 @@
                         
                         <HBox justifyContent="SpaceBetween" alignItems="Center" class="sapUiSmallMarginBottom">
                             <Text id="tableCountText" text="No items" />
-                            <SearchField
-                                id="quickSearch"
-                                width="300px"
-                                search=".onQuickSearch" 
-                                placeholder="Quick Search..." />
-
-                             <Button 
+                            <Button 
                                 text="Columns" 
                                 icon="sap-icon://column-chart-dual-axis" 
                                 press=".onColumnsButtonPress" 
                                 tooltip="Select Columns" />
                         </HBox>
                         
-                        <Table
-                            id="entityTable"
-                            items="{viewModel>/items}"
-                            growing="true"
-                            growingThreshold="20"
-                            growingScrollToLoad="true"
-                            fixedLayout="false"
-                            alternateRowColors="true"
-                            class="sapUiResponsiveMargin"
-                            sticky="ColumnHeaders,HeaderToolbar">
-                            
-                            <headerToolbar>
-                                <Toolbar>
-                                    <Title text="{viewModel>/tableName} List" level="H2"/>
-                                    <ToolbarSpacer/>
-                                    <SearchField 
-                                        id="tableSearch"
-                                        width="30%" 
-                                        search=".onSearch" 
-                                        placeholder="Search..."/>
-                                    <Button 
-                                        text="Create New" 
-                                        icon="sap-icon://add" 
-                                        press=".onCreatePress" 
-                                        type="Emphasized"/>
-                                    <Button 
-                                        icon="sap-icon://refresh" 
-                                        tooltip="Refresh Data" 
-                                        press=".onRefreshPress" />
-                                </Toolbar>
-                            </headerToolbar>
-                            
-                            <!-- Columns will be added dynamically in the controller -->
-                            <columns>
-                                <!-- Dynamic columns -->
-                            </columns>
-                            
-                            <items>
-                                <ColumnListItem type="Navigation" press=".onItemPress">
-                                    <!-- Cells will be added dynamically in the controller -->
-                                </ColumnListItem>
-                            </items>
-                        </Table>
+                        <!-- Table wrapper -->
+                        <VBox id="tableContainer" width="100%" class="sapUiNoContentPadding">
+                            <VBox width="100%" class="tableScrollContainer">
+                                <Table
+                                    id="entityTable"
+
+                                    growing="true"
+                                    growingThreshold="20"
+                                    growingScrollToLoad="true"
+                                    alternateRowColors="true"
+                                    sticky="ColumnHeaders,HeaderToolbar">
+                                    
+                                    <headerToolbar>
+                                        <Toolbar>
+                                            <Title text="{viewModel>/tableName} List" level="H2"/>
+                                            <ToolbarSpacer/>
+                                            <SearchField 
+                                                id="tableSearch"
+                                                width="30%" 
+                                                search=".onSearch" 
+                                                placeholder="Search..."/>
+                                            <Button 
+                                                text="Create New" 
+                                                icon="sap-icon://add" 
+                                                press=".onCreatePress" 
+                                                type="Emphasized"/>
+                                            <Button 
+                                                icon="sap-icon://refresh" 
+                                                tooltip="Refresh Data" 
+                                                press=".onRefreshPress" />
+                                        </Toolbar>
+                                    </headerToolbar>
+                                    
+                                    <!-- Columns will be added dynamically in the controller -->
+                                    <columns>
+                                        <!-- Dynamic columns -->
+                                    </columns>
+                                    
+                                    <items>
+                                        <ColumnListItem type="Navigation" press=".onItemPress">
+                                            <!-- Cells will be added dynamically in the controller -->
+                                        </ColumnListItem>
+                                    </items>
+                                </Table>
+                            </VBox>
+                        </VBox>
                     </VBox>
                 </f:content>
             </f:DynamicPage>

@@ -102,3 +102,69 @@ html[data-sap-ui-theme="sap_horizon_hcw"] .sapMText,
     height: 100%;
     min-height: 16rem;
 }
+/* Custom horizontal scroller */
+.customHorizontalScroller {
+    overflow-x: auto !important;
+    width: 100%;
+    margin-bottom: 8px;
+    height: 12px;
+    background-color: #f5f5f5;
+    border-radius: 4px;
+}
+
+/* Make sure table cells have minimum width */
+.sapMListTblCell {
+    min-width: 12rem;
+}
+
+/* Fix for growing tables - ensure the scroll container is always visible */
+.sapMGrowingList {
+    overflow: visible !important;
+}
+
+/* Make sure the table allows horizontal scrolling */
+.sapMListTbl {
+    overflow-x: auto !important;
+    min-width: 100%;
+}
+
+/* Ensure sticky headers stay in place when scrolling */
+.sapMSticky .sapMListTblHeader {
+    position: sticky !important;
+    top: 0;
+    z-index: 100;
+    background-color: #ffffff;
+}
+
+.sapMSticky .sapMListTblHeaderCell {
+    position: sticky !important;
+    top: 3rem;
+    z-index: 99;
+    background-color: #ffffff;
+}
+
+/* For mobile devices */
+@media (max-width: 599px) {
+    .customHorizontalScroller {
+        display: block !important;
+    }
+}
+
+/* Make scrollbar more visible */
+.customHorizontalScroller::-webkit-scrollbar {
+    height: 8px;
+}
+
+.customHorizontalScroller::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 4px;
+}
+
+.customHorizontalScroller::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+/* Optional: Add smooth scrolling transition */
+.sapMListTbl, .customHorizontalScroller {
+    scroll-behavior: smooth;
+}

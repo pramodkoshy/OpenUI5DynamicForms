@@ -1,8 +1,9 @@
 sap.ui.define([
     "sap/ui/core/UIComponent",
     "sap/ui/Device",
-    "./model/models"
-], function(UIComponent, Device, models) {
+    "./model/models",
+    "./model/EntityCacheManager" // Import already added
+], function(UIComponent, Device, models, EntityCacheManager) {
     "use strict";
 
     // Disable flexibility services before component creation
@@ -36,9 +37,28 @@ sap.ui.define([
             
             // Initialize router
             this.getRouter().initialize();
+
+            // Create the entity cache manager
+            this._entityCacheManager = new EntityCacheManager();
             
             // Delay split app initialization
             setTimeout(this._initSplitApp.bind(this), 100);
+        },
+
+        /**
+         * Get the Entity Cache Manager instance
+         * @returns {com.supabase.easyui5.model.EntityCacheManager} The entity cache manager
+         */
+        getEntityCacheManager: function() {
+            return this._entityCacheManager;
+        },
+
+        /**
+         * Get the Supabase client instance
+         * @returns {Object} The Supabase client
+         */
+        getSupabaseClient: function() {
+            return window.supabaseClient;
         },
 
         initSupabase: function() {
@@ -69,7 +89,6 @@ sap.ui.define([
             script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
             document.head.appendChild(script);
         },
-
 
         initTheme: function() {
             const validThemes = [
@@ -202,12 +221,35 @@ sap.ui.define([
         
         // Metadata provider implementation
         getTableMetadata: function(sTableId) {
+            // Check if we have it in the EntityCacheManager cache first
+            const sCacheKey = `metadata_${sTableId}`;
+            
+            // Try to get from cache manager
+            if (this._entityCacheManager) {
+                // Check if cached before proceeding with default logic
+                if (this._entityCacheManager.isCached(sCacheKey)) {
+                    return this._entityCacheManager.getEntityData(sCacheKey, {}, () => {
+                        // This should never execute since we checked isCached above
+                        return Promise.resolve(this._getDefaultTableMetadata(sTableId));
+                    });
+                }
+            }
+            
+            // Fall back to regular metadata retrieval
+            return Promise.resolve(this._getDefaultTableMetadata(sTableId));
+        },
+        
+        /**
+         * Get default table metadata (extracted from original getTableMetadata method)
+         * @private
+         */
+        _getDefaultTableMetadata: function(sTableId) {
             // Cache for table metadata
             this._tableMetadataCache = this._tableMetadataCache || {};
             
             // Return from cache if available
             if (this._tableMetadataCache[sTableId]) {
-                return Promise.resolve(this._tableMetadataCache[sTableId]);
+                return this._tableMetadataCache[sTableId];
             }
             
             // Define default metadata for tables
@@ -218,7 +260,7 @@ sap.ui.define([
                     subtitleField: "contact_name",
                     columns: [
                         { name: "supplier_id", label: "ID", type: "string", visible: true, editable: false, required: false },
-                        { name: "company_name", label: "Company", type: "string", visible: true, editable: true, required: true }, // Changed from "name" to "company_name"
+                        { name: "company_name", label: "Company", type: "string", visible: true, editable: true, required: true }, 
                         { name: "contact_name", label: "Contact Name", type: "string", visible: true, editable: true, required: false },
                         { name: "email", label: "Contact Email", type: "email", visible: true, editable: true, required: false },
                         { name: "phone", label: "Phone", type: "string", visible: true, editable: true, required: false },
@@ -234,15 +276,14 @@ sap.ui.define([
                 },
                 products: {
                     primaryKey: "product_id",
-                    titleField: "product_name", // Changed from "name" to "product_name" 
+                    titleField: "product_name",
                     subtitleField: "description",
                     columns: [
                         { name: "product_id", label: "ID", type: "string", visible: true, editable: false, required: false },
-                        { name: "product_name", label: "Name", type: "string", visible: true, editable: true, required: true }, // Changed from "name" to "product_name"
+                        { name: "product_name", label: "Name", type: "string", visible: true, editable: true, required: true },
                         { name: "description", label: "Description", type: "text", visible: true, editable: true, required: false },
-                        { name: "unit_price", label: "Price", type: "number", visible: true, editable: true, required: true }, // Changed from "price" to "unit_price"
+                        { name: "unit_price", label: "Price", type: "number", visible: true, editable: true, required: true },
                         { name: "category", label: "Category", type: "string", visible: true, editable: true, required: false },
-                   //     { name: "in_stock", label: "In Stock", type: "boolean", visible: true, editable: true, required: false },
                         { name: "supplier_id", label: "Supplier", type: "relation", relation: "suppliers", visible: true, editable: true, required: true },
                         { name: "created_at", label: "Created At", type: "date", visible: true, editable: false, required: false },
                         { name: "updated_at", label: "Updated At", type: "date", visible: true, editable: false, required: false }
@@ -252,11 +293,11 @@ sap.ui.define([
                     ]
                 },
                 customers: {
-                    primaryKey: "customer_id", // Changed from "id" to "customer_id"
+                    primaryKey: "customer_id",
                     titleField: "name",
                     subtitleField: "email",
                     columns: [
-                        { name: "customer_id", label: "ID", type: "string", visible: true, editable: false, required: false }, // Changed from "id" to "customer_id"
+                        { name: "customer_id", label: "ID", type: "string", visible: true, editable: false, required: false },
                         { name: "name", label: "Name", type: "string", visible: true, editable: true, required: true },
                         { name: "email", label: "Email", type: "email", visible: true, editable: true, required: true },
                         { name: "phone", label: "Phone", type: "string", visible: true, editable: true, required: false },
@@ -271,16 +312,14 @@ sap.ui.define([
                     ]
                 },
                 orders: {
-                    primaryKey: "order_id", // Changed from "id" to "order_id"
+                    primaryKey: "order_id",
                     titleField: "id",
                     subtitleField: "status",
                     columns: [
-                        { name: "order_id", label: "ID", type: "string", visible: true, editable: false, required: false }, // Changed from "id" to "order_id"
+                        { name: "order_id", label: "ID", type: "string", visible: true, editable: false, required: false },
                         { name: "customer_id", label: "Customer", type: "relation", relation: "customers", visible: true, editable: true, required: true },
                         { name: "order_date", label: "Order Date", type: "date", visible: true, editable: true, required: true },
-                    
                         { name: "total_amount", label: "Total Amount", type: "number", visible: true, editable: true, required: true },
-            
                         { name: "created_at", label: "Created At", type: "date", visible: true, editable: false, required: false },
                         { name: "updated_at", label: "Updated At", type: "date", visible: true, editable: false, required: false }
                     ],
@@ -289,11 +328,11 @@ sap.ui.define([
                     ]
                 },
                 order_items: {
-                    primaryKey: "order_item_id", // Changed from "id" to "order_item_id"
+                    primaryKey: "order_item_id",
                     titleField: "id",
                     subtitleField: "quantity",
                     columns: [
-                        { name: "order_item_id", label: "ID", type: "string", visible: true, editable: false, required: false }, // Changed from "id" to "order_item_id"
+                        { name: "order_item_id", label: "ID", type: "string", visible: true, editable: false, required: false },
                         { name: "order_id", label: "Order", type: "relation", relation: "orders", visible: true, editable: true, required: true },
                         { name: "product_id", label: "Product", type: "relation", relation: "products", visible: true, editable: true, required: true },
                         { name: "quantity", label: "Quantity", type: "number", visible: true, editable: true, required: true },
@@ -309,7 +348,14 @@ sap.ui.define([
             if (oDefaultMetadata[sTableId]) {
                 // Store in cache
                 this._tableMetadataCache[sTableId] = oDefaultMetadata[sTableId];
-                return Promise.resolve(oDefaultMetadata[sTableId]);
+                
+                // Also store in entity cache manager if available
+                if (this._entityCacheManager) {
+                    const sCacheKey = `metadata_${sTableId}`;
+                    this._entityCacheManager.setEntityCache(sCacheKey, oDefaultMetadata[sTableId]);
+                }
+                
+                return oDefaultMetadata[sTableId];
             }
             
             // Fall back to generic structure
@@ -329,7 +375,14 @@ sap.ui.define([
             
             // Store in cache
             this._tableMetadataCache[sTableId] = oGenericMetadata;
-            return Promise.resolve(oGenericMetadata);
+            
+            // Also store in entity cache manager if available
+            if (this._entityCacheManager) {
+                const sCacheKey = `metadata_${sTableId}`;
+                this._entityCacheManager.setEntityCache(sCacheKey, oGenericMetadata);
+            }
+            
+            return oGenericMetadata;
         },
 
         /**

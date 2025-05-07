@@ -42,12 +42,8 @@ sap.ui.define([
             }
         },
         
+
         /**
-         * EntityDetail.controller.js
-         * 
-         * Enhanced onInit method to check for parent information in edit mode
-         */
-       /**
          * Lifecycle hook when the controller is initialized with improved parent info handling
          */
         onInit: function() {
@@ -88,8 +84,9 @@ sap.ui.define([
             }
         },
 
+
         /**
-         * Load parent info for edit navigation flow
+         * Enhanced loadParentInfoForEdit with better error handling
          * @private
          */
         _loadParentInfoForEdit: function() {
@@ -99,25 +96,35 @@ sap.ui.define([
                 
                 if (sParentInfo) {
                     const oParentInfo = JSON.parse(sParentInfo);
+                    console.log("Found parent info:", JSON.stringify(oParentInfo, null, 2));
                     
-                    // Only use if this has the isEditing flag
-                    if (oParentInfo.isEditing === true) {
-                        console.log("Found parent info for edit mode:", JSON.stringify(oParentInfo, null, 2));
-                        
-                        // Store in view model for later use in save handler
-                        const oViewModel = this.getModel("viewModel");
-                        oViewModel.setProperty("/parentInfo", oParentInfo);
-                        
-                        // Create a backup
-                        this._parentInfoBackup = JSON.parse(JSON.stringify(oParentInfo));
-                    }
+                    // Check if the parent info is recent (within last 5 minutes)
+                    const bFresh = oParentInfo.timestamp && 
+                                (new Date().getTime() - oParentInfo.timestamp < 5 * 60 * 1000);
+                    
+                    // Store the parent info regardless of flags - we'll use it for back navigation
+                    const oViewModel = this.getModel("viewModel");
+                    oViewModel.setProperty("/parentInfo", oParentInfo);
+                    
+                    // Create a backup as well
+                    this._parentInfoBackup = JSON.parse(JSON.stringify(oParentInfo));
+                    
+                    console.log("Parent info stored in view model and backup created");
+                    
+                    // Log detailed state
+                    console.log("Parent entity:", oParentInfo.parentTable, oParentInfo.parentId);
+                    console.log("Is editing:", oParentInfo.isEditing);
+                    console.log("Foreign key:", oParentInfo.foreignKey);
+                    console.log("Info freshness:", bFresh ? "Fresh" : "Stale");
+                } else {
+                    console.log("No parent info found in session storage");
                 }
             } catch (e) {
                 console.error("Error parsing parent entity info:", e);
             }
         },
-                        
-        /**
+                                                
+                /**
          * Try to register controller extensions
          * @private
          */
@@ -694,233 +701,7 @@ sap.ui.define([
             }
         },
         
-        /**
-         * Handler for edit button press with direct validation
-         */
-        onEditPress: function() {
-            console.log("Edit button pressed with direct validation");
-            
-            // Get the view model and entity data
-            const oViewModel = this.getModel("viewModel");
-            const sTableId = oViewModel.getProperty("/tableId");
-            const sEntityId = oViewModel.getProperty("/entityId");
-            
-            // Validate that we have a proper entity ID
-            if (!sEntityId) {
-                this.showErrorMessage("Cannot edit: Missing entity ID");
-                return;
-            }
-            
-            console.log("Editing entity with ID:", sEntityId);
-            
-            // Store original entity data for checking changes later
-            const oEntityData = JSON.parse(JSON.stringify(oViewModel.getProperty("/entity")));
-            oViewModel.setProperty("/originalEntity", oEntityData);
-            
-            // Toggle edit mode
-            oViewModel.setProperty("/editMode", true);
-            
-            // Initialize form fields collection if needed
-            this.getView().getController()._formFields = {};
-            
-            // Get metadata for the table
-            this.getTableMetadata(sTableId).then((oMetadata) => {
-                // Create a dialog with a simple form
-                const oEditDialog = new sap.m.Dialog({
-                    title: "Edit " + oViewModel.getProperty("/tableName"),
-                    contentWidth: "40rem",
-                    content: [
-                        new sap.ui.layout.form.SimpleForm({
-                            editable: true,
-                            layout: "ResponsiveGridLayout",
-                            labelSpanXL: 4,
-                            labelSpanL: 4,
-                            labelSpanM: 4,
-                            labelSpanS: 12,
-                            columnsXL: 1,
-                            columnsL: 1,
-                            content: this._createEditFormContent(oMetadata, oEntityData)
-                        })
-                    ],
-                    beginButton: new sap.m.Button({
-                        text: "Save",
-                        type: "Emphasized",
-                        press: function() {
-                            // Direct validation inside the save handler
-                            let bValid = true;
-                            
-                            // Reset validation states
-                            this._editControls = this._editControls || {};
-                            Object.values(this._editControls).forEach(function(oControl) {
-                                if (oControl.setValueState) {
-                                    oControl.setValueState("None");
-                                }
-                            });
-                            
-                            // Check required fields and validate types
-                            oMetadata.columns.forEach((oColumnMetadata) => {
-                                // Skip fields that are not editable or not visible
-                                if (oColumnMetadata.editable === false || 
-                                    !oColumnMetadata.visible || 
-                                    oColumnMetadata.name === oMetadata.primaryKey ||
-                                    oColumnMetadata.name === 'created_at' ||
-                                    oColumnMetadata.name === 'updated_at') {
-                                    return;
-                                }
-                                
-                                const oControl = this._editControls[oColumnMetadata.name];
-                                if (!oControl) return;
-                                
-                                // Get current value
-                                let vValue;
-                                if (oControl instanceof sap.m.CheckBox) {
-                                    vValue = oControl.getSelected();
-                                } else if (oControl.getValue) {
-                                    vValue = oControl.getValue();
-                                }
-                                
-                                // Check required fields
-                                if (oColumnMetadata.required === true && 
-                                    (vValue === undefined || vValue === null || vValue === "")) {
-                                    bValid = false;
-                                    
-                                    if (oControl.setValueState) {
-                                        oControl.setValueState("Error");
-                                        if (oControl.setValueStateText) {
-                                            oControl.setValueStateText("This field is required");
-                                        }
-                                    }
-                                    
-                                    console.log("Validation failed:", oColumnMetadata.name, "is required");
-                                    return;
-                                }
-                                
-                                // Skip further validation if empty and not required
-                                if (vValue === undefined || vValue === null || vValue === "") {
-                                    return;
-                                }
-                                
-                                // Validate by type
-                                let bTypeValid = true;
-                                let sErrorMessage = "";
-                                
-                                switch (oColumnMetadata.type) {
-                                    case "number":
-                                        if (isNaN(parseFloat(vValue)) || !isFinite(vValue)) {
-                                            bTypeValid = false;
-                                            sErrorMessage = "Please enter a valid number";
-                                        }
-                                        break;
-                                        
-                                    case "date":
-                                        const oDate = new Date(vValue);
-                                        if (isNaN(oDate.getTime())) {
-                                            bTypeValid = false;
-                                            sErrorMessage = "Please enter a valid date";
-                                        }
-                                        break;
-                                        
-                                    case "email":
-                                        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-                                        if (!emailRegex.test(vValue)) {
-                                            bTypeValid = false;
-                                            sErrorMessage = "Please enter a valid email address";
-                                        }
-                                        break;
-                                        
-                                    case "url":
-                                        const urlRegex = /^(http|https):\/\/[^ "]+$/;
-                                        if (!urlRegex.test(vValue)) {
-                                            bTypeValid = false;
-                                            sErrorMessage = "Please enter a valid URL (starting with http:// or https://)";
-                                        }
-                                        break;
-                                }
-                                
-                                if (!bTypeValid) {
-                                    bValid = false;
-                                    
-                                    if (oControl.setValueState) {
-                                        oControl.setValueState("Error");
-                                        if (oControl.setValueStateText) {
-                                            oControl.setValueStateText(sErrorMessage);
-                                        }
-                                    }
-                                    
-                                    console.log("Validation failed:", oColumnMetadata.name, sErrorMessage);
-                                }
-                            });
-                            
-                            // If validation fails, show a message and don't close the dialog
-                            if (!bValid) {
-                                sap.m.MessageToast.show("Please correct the errors before saving");
-                                return;
-                            }
-                            
-                            // Collect updated data from controls
-                            const oUpdatedData = JSON.parse(JSON.stringify(oEntityData));
-                            oMetadata.columns.forEach((oColumnMetadata) => {
-                                // Skip fields that are not editable or not visible
-                                if (oColumnMetadata.editable === false || 
-                                    !oColumnMetadata.visible || 
-                                    oColumnMetadata.name === oMetadata.primaryKey ||
-                                    oColumnMetadata.name === 'created_at' ||
-                                    oColumnMetadata.name === 'updated_at') {
-                                    return;
-                                }
-                                
-                                const oControl = this._editControls[oColumnMetadata.name];
-                                if (!oControl) return;
-                                
-                                // Get value based on control type
-                                if (oControl instanceof sap.m.CheckBox) {
-                                    oUpdatedData[oColumnMetadata.name] = oControl.getSelected();
-                                } else if (oControl instanceof sap.m.DatePicker) {
-                                    oUpdatedData[oColumnMetadata.name] = oControl.getValue();
-                                } else if (oControl.getValue) {
-                                    oUpdatedData[oColumnMetadata.name] = oControl.getValue();
-                                }
-                            });
-                            
-                            // Check if any changes were made
-                            if (this._areObjectsEqual(oUpdatedData, oEntityData)) {
-                                sap.m.MessageBox.information(
-                                    "No changes were made to this record.",
-                                    {
-                                        title: "No Changes",
-                                        onClose: function() {
-                                            // Close dialog anyway
-                                            oEditDialog.close();
-                                        }
-                                    }
-                                );
-                                return;
-                            }
-                            
-                            // Save data - explicitly pass the entityId as a separate parameter
-                            this._saveEntity(sTableId, sEntityId, oMetadata, oUpdatedData);
-                            
-                            // Close dialog
-                            oEditDialog.close();
-                        }.bind(this)
-                    }),
-                    endButton: new sap.m.Button({
-                        text: "Cancel",
-                        press: function() {
-                            oEditDialog.close();
-                        }
-                    }),
-                    afterClose: function() {
-                        oEditDialog.destroy();
-                        // Clean up stored controls
-                        this._editControls = null;
-                    }.bind(this)
-                });
-                
-                this.getView().addDependent(oEditDialog);
-                oEditDialog.open();
-            });
-        },
+      
 
         /**
          * Create content for the edit form with direct control references and enhanced validation
@@ -1610,6 +1391,31 @@ sap.ui.define([
             // Set busy state
             oViewModel.setProperty("/busy", true);
             
+            // Get parent info from the view model
+            let oParentInfo = oViewModel.getProperty("/parentInfo");
+            
+            // If not in view model, try backup
+            if (!oParentInfo && this._parentInfoBackup) {
+                console.log("Using parent info backup");
+                oParentInfo = this._parentInfoBackup;
+            }
+            
+            if (!oParentInfo) {
+                try {
+                    // Last attempt to get from session storage
+                    const sParentInfo = sessionStorage.getItem("parentEntityInfo");
+                    if (sParentInfo) {
+                        oParentInfo = JSON.parse(sParentInfo);
+                        console.log("Retrieved parent info from session storage");
+                    }
+                } catch (e) {
+                    console.error("Error retrieving parent info from session storage:", e);
+                }
+            }
+            
+            console.log("Parent info for navigation after save:", 
+                oParentInfo ? JSON.stringify(oParentInfo, null, 2) : "none");
+            
             // Get metadata for the table
             this.getTableMetadata(sTableId).then((oMetadata) => {
                 // Validate form data
@@ -1640,31 +1446,6 @@ sap.ui.define([
                 oDataToUpdate['updated_at'] = new Date().toISOString();
                 
                 console.log("Data to update:", JSON.stringify(oDataToUpdate, null, 2));
-                
-                // Get parent info if available (for navigation after save)
-                let oParentInfo = oViewModel.getProperty("/parentInfo");
-                
-                // If not in view model, try backup
-                if (!oParentInfo && this._parentInfoBackup) {
-                    console.log("Using parent info backup");
-                    oParentInfo = this._parentInfoBackup;
-                }
-                
-                if (!oParentInfo) {
-                    try {
-                        // Last attempt to get from session storage
-                        const sParentInfo = sessionStorage.getItem("parentEntityInfo");
-                        if (sParentInfo) {
-                            oParentInfo = JSON.parse(sParentInfo);
-                            console.log("Retrieved parent info from session storage");
-                        }
-                    } catch (e) {
-                        console.error("Error retrieving parent info from session storage:", e);
-                    }
-                }
-                
-                console.log("Parent info for navigation after save:", 
-                    oParentInfo ? JSON.stringify(oParentInfo, null, 2) : "none");
                 
                 // Update entity
                 this.getSupabaseClient()
@@ -1725,15 +1506,15 @@ sap.ui.define([
                 oViewModel.setProperty("/busy", false);
             });
         },
+   
         /**
-         * Enhanced onCancelPress method with parent navigation
+         * Enhanced onCancelPress method with improved parent entity detection
          */
         onCancelPress: function() {
             console.log("Cancel button pressed");
             
             const oViewModel = this.getModel("viewModel");
             const sTableId = oViewModel.getProperty("/tableId");
-            const sEntityId = oViewModel.getProperty("/entityId");
             
             // Get parent info from view model
             let oParentInfo = oViewModel.getProperty("/parentInfo");
@@ -1768,27 +1549,34 @@ sap.ui.define([
             // Reset edit mode
             oViewModel.setProperty("/editMode", false);
             
-            // Check if we're in a related item edit flow and navigate accordingly
-            if (oParentInfo && oParentInfo.isEditing && 
-                oParentInfo.parentTable && oParentInfo.parentId) {
-                
-                console.log("Navigating back to parent entity after cancel:", 
+            // Navigate based on parent info
+            if (oParentInfo && oParentInfo.parentTable && oParentInfo.parentId) {
+                console.log("Navigating to parent entity after cancel:", 
                     oParentInfo.parentTable, oParentInfo.parentId);
                 
-                // Navigate back to parent entity with a small delay
-                setTimeout(() => {
-                    this.getRouter().navTo("entityDetail", {
-                        table: oParentInfo.parentTable,
-                        id: oParentInfo.parentId
+                try {
+                    // Force a small delay to ensure proper transition
+                    setTimeout(() => {
+                        this.getRouter().navTo("entityDetail", {
+                            table: oParentInfo.parentTable,
+                            id: oParentInfo.parentId
+                        });
+                        console.log("Navigation to parent initiated after cancel");
+                    }, 100);
+                } catch (e) {
+                    console.error("Error during navigation to parent after cancel:", e);
+                    
+                    // Fallback navigation to list view
+                    this.getRouter().navTo("entityList", {
+                        table: sTableId
                     });
-                    console.log("Navigation back to parent initiated after cancel");
-                }, 100);
+                }
             } else {
-                // No parent info or not in edit mode - reload the entity
-                this._loadEntity(sTableId, sEntityId);
+                // No parent info - reload the entity
+                this._loadEntity(sTableId, oViewModel.getProperty("/entityId"));
             }
         },
-        
+                
         /**
          * Handler for add related item press
          */
@@ -1823,13 +1611,38 @@ sap.ui.define([
             });
         },
         
+
         /**
-         * Handler for edit related item press
+         * Handler for edit related item press with proper event handling
+         * @param {sap.ui.base.Event} oEvent The button press event
+         * @public
          */
         onEditRelatedItemPress: function(oEvent) {
-            // Get the list item from the button's parent
+            console.log("Edit related item button pressed");
+            
+            // For UI5 events, prevent default event behavior
+            if (oEvent.preventDefault) {
+                oEvent.preventDefault();
+            }
+            
+            // Get the button that was pressed
             const oButton = oEvent.getSource();
-            const oItem = oButton.getParent().getParent();
+            
+            // Get the list item - navigate up the control tree
+            // Button is inside HBox which is inside a Cell which is inside a ColumnListItem
+            let oItem = oButton;
+            let nLevel = 0;
+            
+            // Find the ColumnListItem (table row)
+            while (oItem && !(oItem instanceof sap.m.ColumnListItem) && nLevel < 5) {
+                oItem = oItem.getParent();
+                nLevel++;
+            }
+            
+            if (!oItem || !(oItem instanceof sap.m.ColumnListItem)) {
+                console.error("Could not find parent list item");
+                return;
+            }
             
             // Get the binding context
             const oContext = oItem.getBindingContext("viewModel");
@@ -1838,34 +1651,72 @@ sap.ui.define([
                 return;
             }
             
+            // Get the item data
             const oData = oContext.getObject();
+            
+            // Get view model and current entity info
             const oViewModel = this.getModel("viewModel");
-            const sTableId = oViewModel.getProperty("/tableId");
+            const sCurrentTableId = oViewModel.getProperty("/tableId");
+            const sCurrentEntityId = oViewModel.getProperty("/entityId");
             
-            console.log("Edit related item:", oData);
+            console.log("Editing related item from parent:", sCurrentTableId, sCurrentEntityId);
             
-            // Get metadata for the current table
-            this.getTableMetadata(sTableId).then((oMetadata) => {
-                // Get the relations
+            // Get the related table ID from the current table's relations
+            this.getTableMetadata(sCurrentTableId).then((oMetadata) => {
+                // Check if relations are defined
                 if (!oMetadata.relations || oMetadata.relations.length === 0) {
                     console.error("No relations defined in metadata");
+                    sap.m.MessageBox.error("No relations defined for this entity");
                     return;
                 }
                 
+                // Get the first relation (related table info)
                 const oRelation = oMetadata.relations[0];
+                const sRelatedTableId = oRelation.table;
+                
+                console.log(`Relation found: ${sRelatedTableId} with foreign key ${oRelation.foreignKey}`);
                 
                 // Get metadata for related table
-                this.getTableMetadata(oRelation.table).then((oRelatedMetadata) => {
+                this.getTableMetadata(sRelatedTableId).then((oRelatedMetadata) => {
+                    // Get primary key for related table
                     const sPrimaryKey = oRelatedMetadata.primaryKey;
                     const sPrimaryKeyValue = oData[sPrimaryKey];
                     
-                    console.log(`Navigating to edit related item: ${oRelation.table}/${sPrimaryKeyValue}`);
+                    console.log(`Related item primary key: ${sPrimaryKey}, value: ${sPrimaryKeyValue}`);
                     
-                    // Navigate to detail page of related item
-                    this.getRouter().navTo("entityDetail", {
-                        table: oRelation.table,
-                        id: sPrimaryKeyValue
-                    });
+                    // Create parent entity info with clear markers
+                    const oParentInfo = {
+                        parentTable: sCurrentTableId,
+                        parentId: sCurrentEntityId,
+                        isEditing: true,
+                        foreignKey: oRelation.foreignKey,
+                        sourceView: "EntityDetail", 
+                        timestamp: new Date().getTime()
+                    };
+                    
+                    console.log("Setting parent info in session storage:", JSON.stringify(oParentInfo, null, 2));
+                    
+                    // Store in session storage with explicit error handling
+                    try {
+                        // Clear any existing data first
+                        sessionStorage.removeItem("parentEntityInfo");
+                        // Then set the new data
+                        sessionStorage.setItem("parentEntityInfo", JSON.stringify(oParentInfo));
+                        console.log("Parent info successfully stored in session storage");
+                    } catch (e) {
+                        console.error("Failed to store parent info in session storage:", e);
+                        // Show error to user
+                        sap.m.MessageBox.error("Failed to store navigation state. Back navigation may not work correctly.");
+                    }
+                    
+                    // Navigate to the detail view of the related item with delay to ensure storage completes
+                    setTimeout(() => {
+                        this.getRouter().navTo("entityDetail", {
+                            table: sRelatedTableId,
+                            id: sPrimaryKeyValue
+                        });
+                        console.log("Navigation to edit related item initiated");
+                    }, 100);
                 });
             });
         },
@@ -2477,79 +2328,96 @@ sap.ui.define([
             });
         },
 
+ 
         /**
-         * Enhanced onNavBack function for EntityDetail controller
-         * This method detects whether navigation originated from a related items table
-         * and navigates accordingly.
+         * Enhanced navigation handler that properly handles parent entity return
          */
         onNavBack: function() {
             console.log("Back button pressed");
             
             const oViewModel = this.getModel("viewModel");
             const sTableId = oViewModel.getProperty("/tableId");
+            const sEntityId = oViewModel.getProperty("/entityId");
             
-            // Get parent info from view model
-            let oParentInfo = oViewModel.getProperty("/parentInfo");
-            
-            // If not in view model, try backup
-            if (!oParentInfo && this._parentInfoBackup) {
-                console.log("Using parent info backup for back navigation");
-                oParentInfo = this._parentInfoBackup;
-            }
-            
-            if (!oParentInfo) {
+            // Try to get parent info from all possible sources
+            const tryGetParentInfo = () => {
+                // First check view model
+                let oParentInfo = oViewModel.getProperty("/parentInfo");
+                if (oParentInfo && oParentInfo.parentTable && oParentInfo.parentId) {
+                    console.log("Using parent info from view model");
+                    return oParentInfo;
+                }
+
+                // Then check backup
+                if (this._parentInfoBackup && this._parentInfoBackup.parentTable && this._parentInfoBackup.parentId) {
+                    console.log("Using parent info from backup");
+                    return this._parentInfoBackup;
+                }
+
+                // Finally check session storage
                 try {
-                    // Last attempt to get from session storage
                     const sParentInfo = sessionStorage.getItem("parentEntityInfo");
                     if (sParentInfo) {
-                        oParentInfo = JSON.parse(sParentInfo);
-                        console.log("Retrieved parent info from session storage for back navigation");
+                        const oStoredInfo = JSON.parse(sParentInfo);
+                        if (oStoredInfo.parentTable && oStoredInfo.parentId) {
+                            console.log("Using parent info from session storage");
+                            return oStoredInfo;
+                        }
                     }
                 } catch (e) {
                     console.error("Error retrieving parent info from session storage:", e);
                 }
-            }
-            
-            // Try to clear session storage
-            try {
-                sessionStorage.removeItem("parentEntityInfo");
-                console.log("Cleared parent info from session storage");
-            } catch (e) {
-                console.warn("Could not clear session storage:", e);
-            }
-            
-            // Navigate based on parent info
-            if (oParentInfo && oParentInfo.parentTable && oParentInfo.parentId) {
-                console.log("Navigating to parent entity after back button:", 
-                    oParentInfo.parentTable, oParentInfo.parentId);
                 
-                try {
-                    // Force a small delay to ensure proper transition
-                    setTimeout(() => {
-                        this.getRouter().navTo("entityDetail", {
-                            table: oParentInfo.parentTable,
-                            id: oParentInfo.parentId
-                        });
-                        console.log("Navigation to parent initiated after back button");
-                    }, 100);
-                } catch (e) {
-                    console.error("Error during navigation to parent after back button:", e);
+                return null;
+            };
+            
+            // Get parent info
+            const oParentInfo = tryGetParentInfo();
+            
+            if (oParentInfo) {
+                console.log("Found valid parent info:", JSON.stringify(oParentInfo, null, 2));
+                
+                // Prepare for navigation
+                const sParentTable = oParentInfo.parentTable;
+                const sParentId = oParentInfo.parentId;
+                
+                // Force a delay to ensure state is synchronized
+                setTimeout(() => {
+                    console.log(`Navigating to parent entity: ${sParentTable}/${sParentId}`);
                     
-                    // Fallback navigation to list view
-                    this.getRouter().navTo("entityList", {
-                        table: sTableId
+                    // Navigate to parent entity
+                    this.getRouter().navTo("entityDetail", {
+                        table: sParentTable,
+                        id: sParentId
                     });
-                }
+                    
+                    // Clear parent info AFTER successful navigation
+                    setTimeout(() => {
+                        try {
+                            sessionStorage.removeItem("parentEntityInfo");
+                            console.log("Cleared parent info from session storage after navigation");
+                        } catch (e) {
+                            console.warn("Could not clear session storage after navigation:", e);
+                        }
+                    }, 300);
+                }, 100);
             } else {
-                // Navigate back to list view
+                // No parent info found, navigate to list view
                 console.log("No parent info, navigating to list view after back button");
                 this.getRouter().navTo("entityList", {
                     table: sTableId
                 });
+                
+                // Still clear session storage
+                try {
+                    sessionStorage.removeItem("parentEntityInfo");
+                    console.log("Cleared parent info from session storage");
+                } catch (e) {
+                    console.warn("Could not clear session storage:", e);
+                }
             }
         },
-
-                /**
+                        /**
          * Update delete button state based on related items
          * @param {Array} aRelatedItems Array of related items
          * @private
@@ -2593,6 +2461,219 @@ sap.ui.define([
                     oDeleteButton.setTooltip("Delete this entity");
                 }
             }
-        }
+        },
+
+        /**
+         * Handler for edit button press with server data refresh
+         */
+        onEditPress: function() {
+            console.log("Edit button pressed - fetching latest data from server");
+            
+            // Get the view model and entity data
+            const oViewModel = this.getModel("viewModel");
+            const sTableId = oViewModel.getProperty("/tableId");
+            const sEntityId = oViewModel.getProperty("/entityId");
+            
+            // Validate that we have a proper entity ID
+            if (!sEntityId) {
+                this.showErrorMessage("Cannot edit: Missing entity ID");
+                return;
+            }
+            
+            console.log("Fetching latest data for entity ID:", sEntityId);
+            
+            // Set busy state while fetching
+            oViewModel.setProperty("/busy", true);
+            
+            // Get metadata for the table
+            this.getTableMetadata(sTableId).then((oMetadata) => {
+                const sPrimaryKey = oMetadata.primaryKey;
+                
+                // Fetch the latest data from server
+                this.getSupabaseClient()
+                    .from(sTableId)
+                    .select('*')
+                    .eq(sPrimaryKey, sEntityId)
+                    .single()
+                    .then(async ({ data, error }) => {
+                        oViewModel.setProperty("/busy", false);
+                        
+                        if (error) {
+                            console.error("Error fetching latest entity data:", error);
+                            this.showErrorMessage("Error fetching latest data", error);
+                            return;
+                        }
+                        
+                        if (!data) {
+                            console.error("No data found for entity");
+                            this.showErrorMessage("Entity not found");
+                            return;
+                        }
+                        
+                        console.log("Latest entity data fetched:", data);
+                        
+                        // Process relation fields if needed
+                        for (const oColumnMetadata of oMetadata.columns) {
+                            if (oColumnMetadata.type === "relation" && data[oColumnMetadata.name]) {
+                                const relatedId = data[oColumnMetadata.name];
+                                const relatedTable = oColumnMetadata.relation;
+                                
+                                try {
+                                    // Get related record
+                                    const relatedMetadata = await this.getTableMetadata(relatedTable);
+                                    const relatedPrimaryKey = relatedMetadata.primaryKey;
+                                    const { data: relatedData, error: relatedError } = await this.getSupabaseClient()
+                                        .from(relatedTable)
+                                        .select('*')
+                                        .eq(relatedPrimaryKey, relatedId)
+                                        .single();
+                                    
+                                    if (!relatedError && relatedData) {
+                                        // Store related text
+                                        const titleField = relatedMetadata.titleField || relatedPrimaryKey;
+                                        data[oColumnMetadata.name + "_text"] = relatedData[titleField];
+                                        data[oColumnMetadata.name + "_obj"] = relatedData;
+                                    }
+                                } catch (e) {
+                                    console.error("Error loading related data", e);
+                                }
+                            }
+                        }
+                        
+                        // Update entity in model with fresh data
+                        oViewModel.setProperty("/entity", data);
+                        
+                        // Store original entity data for checking changes later
+                        oViewModel.setProperty("/originalEntity", JSON.parse(JSON.stringify(data)));
+                        
+                        // Now proceed with opening the edit dialog with the fresh data
+                        this._openEditDialogWithFreshData(oMetadata, data);
+                        
+                    })
+                    .catch(error => {
+                        console.error("Error in Supabase query:", error);
+                        this.showErrorMessage("Error fetching latest data: " + error.message);
+                        oViewModel.setProperty("/busy", false);
+                    });
+            }).catch(error => {
+                console.error("Error getting table metadata:", error);
+                this.showErrorMessage("Error getting table metadata: " + error.message);
+                oViewModel.setProperty("/busy", false);
+            });
+        },
+
+        /**
+         * Open edit dialog with freshly fetched data
+         * @param {Object} oMetadata The table metadata
+         * @param {Object} oEntityData The fresh entity data
+         * @private
+         */
+        _openEditDialogWithFreshData: function(oMetadata, oEntityData) {
+            // Create a dialog with a simple form
+            const oEditDialog = new sap.m.Dialog({
+                title: "Edit " + this.getModel("viewModel").getProperty("/tableName"),
+                contentWidth: "40rem",
+                content: [
+                    new sap.ui.layout.form.SimpleForm({
+                        editable: true,
+                        layout: "ResponsiveGridLayout",
+                        labelSpanXL: 4,
+                        labelSpanL: 4,
+                        labelSpanM: 4,
+                        labelSpanS: 12,
+                        columnsXL: 1,
+                        columnsL: 1,
+                        content: this._createEditFormContent(oMetadata, oEntityData)
+                    })
+                ],
+                beginButton: new sap.m.Button({
+                    text: "Save",
+                    type: "Emphasized",
+                    press: function() {
+                        // Validation and save logic as before
+                        let bValid = true;
+                        
+                        // Reset validation states
+                        this._editControls = this._editControls || {};
+                        Object.values(this._editControls).forEach(function(oControl) {
+                            if (oControl.setValueState) {
+                                oControl.setValueState("None");
+                            }
+                        });
+                        
+                        // Check required fields and validate types
+                        bValid = this._validateEditForm(oMetadata);
+                        
+                        // If validation fails, show a message and don't close the dialog
+                        if (!bValid) {
+                            sap.m.MessageToast.show("Please correct the errors before saving");
+                            return;
+                        }
+                        
+                        // Collect updated data from controls
+                        const oUpdatedData = JSON.parse(JSON.stringify(oEntityData));
+                        oMetadata.columns.forEach((oColumnMetadata) => {
+                            // Skip fields that are not editable or not visible
+                            if (oColumnMetadata.editable === false || 
+                                !oColumnMetadata.visible || 
+                                oColumnMetadata.name === oMetadata.primaryKey ||
+                                oColumnMetadata.name === 'created_at' ||
+                                oColumnMetadata.name === 'updated_at') {
+                                return;
+                            }
+                            
+                            const oControl = this._editControls[oColumnMetadata.name];
+                            if (!oControl) return;
+                            
+                            // Get value based on control type
+                            if (oControl instanceof sap.m.CheckBox) {
+                                oUpdatedData[oColumnMetadata.name] = oControl.getSelected();
+                            } else if (oControl instanceof sap.m.DatePicker) {
+                                oUpdatedData[oColumnMetadata.name] = oControl.getValue();
+                            } else if (oControl.getValue) {
+                                oUpdatedData[oColumnMetadata.name] = oControl.getValue();
+                            }
+                        });
+                        
+                        // Check if any changes were made
+                        if (this._areObjectsEqual(oUpdatedData, oEntityData)) {
+                            sap.m.MessageBox.information(
+                                "No changes were made to this record.",
+                                {
+                                    title: "No Changes",
+                                    onClose: function() {
+                                        // Close dialog anyway
+                                        oEditDialog.close();
+                                    }
+                                }
+                            );
+                            return;
+                        }
+                        
+                        // Save data - explicitly pass the entityId as a separate parameter
+                        this._saveEntity(this.getModel("viewModel").getProperty("/tableId"), 
+                                        this.getModel("viewModel").getProperty("/entityId"), 
+                                        oMetadata, oUpdatedData);
+                        
+                        // Close dialog
+                        oEditDialog.close();
+                    }.bind(this)
+                }),
+                endButton: new sap.m.Button({
+                    text: "Cancel",
+                    press: function() {
+                        oEditDialog.close();
+                    }
+                }),
+                afterClose: function() {
+                    oEditDialog.destroy();
+                    // Clean up stored controls
+                    this._editControls = null;
+                }.bind(this)
+            });
+            
+            this.getView().addDependent(oEditDialog);
+            oEditDialog.open();
+        },
     });
 });

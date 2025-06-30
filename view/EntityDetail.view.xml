@@ -149,14 +149,12 @@
                         </uxap:subSections>
                     </uxap:ObjectPageSection>
 
-                    <!-- Related Items Section - ALWAYS visible -->
+                    <!-- Related Items Section -->
                     <uxap:ObjectPageSection title="Related Items" id="relatedItemsSection" visible="true">
                         <uxap:subSections>
                             <uxap:ObjectPageSubSection>
                                 <uxap:blocks>
                                     <VBox>
-
-                                        <!-- Modified Table with Direct Button Bindings -->
                                         <Table
                                             id="relatedItemsTable"
                                             growing="true"
@@ -264,6 +262,191 @@
                                                 <Text text="{path: 'viewModel>/entity/created_at', formatter: '.formatter.formatDate'}" />
                                             </form:SimpleForm>
                                         </Panel>
+                                    </VBox>
+                                </uxap:blocks>
+                            </uxap:ObjectPageSubSection>
+                        </uxap:subSections>
+                    </uxap:ObjectPageSection>
+
+                    <!-- Files Section -->
+                    <uxap:ObjectPageSection id="filesSection" title="Files" show="true">
+                        <uxap:subSections>
+                            <uxap:ObjectPageSubSection>
+                                <uxap:blocks>
+                                    <VBox class="sapUiMediumMargin">
+                                        <HBox justifyContent="SpaceBetween" class="sapUiMediumMarginBottom">
+                                            <Title text="Related Files" level="H3"/>
+                                            <Button id="addFileBtn" 
+                                                    icon="sap-icon://add-document" 
+                                                    text="Add File" 
+                                                    type="Emphasized"
+                                                    press="onAddFile"/>
+                                        </HBox>
+                                        
+                                        <Table id="filesTable" 
+                                            mode="None" 
+                                            items="{
+                                                path: 'viewModel>/files',
+                                                sorter: {
+                                                    path: 'created_at',
+                                                    descending: true
+                                                }
+                                            }"
+                                            noDataText="No files attached">
+                                            
+                                            <columns>
+                                                <Column>
+                                                    <header>
+                                                        <Label text="File Name"/>
+                                                    </header>
+                                                </Column>
+                                                <Column>
+                                                    <header>
+                                                        <Label text="Type"/>
+                                                    </header>
+                                                </Column>
+                                                <Column>
+                                                    <header>
+                                                        <Label text="Size"/>
+                                                    </header>
+                                                </Column>
+                                                <Column>
+                                                    <header>
+                                                        <Label text="Description"/>
+                                                    </header>
+                                                </Column>
+                                                <Column>
+                                                    <header>
+                                                        <Label text="Uploaded"/>
+                                                    </header>
+                                                </Column>
+                                                <Column>
+                                                    <header>
+                                                        <Label text="Actions"/>
+                                                    </header>
+                                                </Column>
+                                            </columns>
+                                            
+                                            <items>
+                                                <ColumnListItem>
+                                                    <HBox alignItems="Center">
+                                                        <core:Icon src="sap-icon://document" size="1.25rem" class="sapUiMediumMarginEnd"/>
+                                                        <Text text="{viewModel>original_name}" maxLines="1"/>
+                                                    </HBox>
+                                                    
+                                                    <Text text="{viewModel>file_type}" maxLines="1"/>
+                                                    
+                                                    <Text text="{
+                                                        path: 'viewModel>file_size',
+                                                        formatter: '.formatFileSize'
+                                                    }"/>
+                                                    
+                                                    <Text text="{viewModel>description}" maxLines="2" wrapping="true"/>
+                                                    
+                                                    <VBox>
+                                                        <Text text="{
+                                                            path: 'viewModel>created_at',
+                                                            formatter: '.formatDate'
+                                                        }"/>
+                                                        <Text text="by {viewModel>uploaded_by}" class="sapUiTinyText"/>
+                                                    </VBox>
+                                                    
+                                                    <HBox>
+                                                        <Button icon="sap-icon://detail-view" 
+                                                                tooltip="View File"
+                                                                type="Transparent"
+                                                                press="onViewFile"/>
+                                                        <Button icon="sap-icon://edit" 
+                                                                tooltip="Edit File Details"
+                                                                type="Transparent"
+                                                                press="onEditFile"/>
+                                                        <Button icon="sap-icon://delete" 
+                                                                tooltip="Delete File"
+                                                                type="Transparent"
+                                                                press="onDeleteFile"/>
+                                                    </HBox>
+                                                </ColumnListItem>
+                                            </items>
+                                        </Table>
+                                    </VBox>
+                                </uxap:blocks>
+                            </uxap:ObjectPageSubSection>
+                        </uxap:subSections>
+                    </uxap:ObjectPageSection>
+
+                    <!-- Notes Section -->
+                    <uxap:ObjectPageSection id="notesSection" title="Notes" show="true">
+                        <uxap:subSections>
+                            <uxap:ObjectPageSubSection>
+                                <uxap:blocks>
+                                    <VBox class="sapUiMediumMargin">
+                                        <HBox justifyContent="SpaceBetween" class="sapUiMediumMarginBottom">
+                                            <Title text="Notes" level="H3"/>
+                                            <Button id="addNoteBtn" 
+                                                    icon="sap-icon://add" 
+                                                    text="Add Note" 
+                                                    type="Emphasized"
+                                                    press="onAddNote"/>
+                                        </HBox>
+                                        
+                                        <VBox items="{
+                                            path: 'viewModel>/notes',
+                                            sorter: {
+                                                path: 'created_at',
+                                                descending: true
+                                            }
+                                        }">
+                                            <Panel expandable="true" expanded="true" headerText="{viewModel>title}"
+                                                class="sapUiMediumMarginBottom notesPanel">
+                                                
+                                                <infoToolbar>
+                                                    <Toolbar>
+                                                        <Label text="{
+                                                            path: 'viewModel>category',
+                                                            formatter: '.formatCategory'
+                                                        }" design="Bold"/>
+                                                        <ToolbarSpacer/>
+                                                        <Text text="{
+                                                            path: 'viewModel>created_at',
+                                                            formatter: '.formatDate'
+                                                        }" class="sapUiTinyText"/>
+                                                        <Text text="by {viewModel>created_by}" class="sapUiTinyText"/>
+                                                        <Button icon="sap-icon://edit" 
+                                                                tooltip="Edit Note"
+                                                                type="Transparent"
+                                                                press="onEditNote"/>
+                                                        <Button icon="sap-icon://delete" 
+                                                                tooltip="Delete Note"
+                                                                type="Transparent"
+                                                                press="onDeleteNote"/>
+                                                    </Toolbar>
+                                                </infoToolbar>
+                                                
+                                                <content>
+                                                    <VBox class="sapUiMediumMargin">
+                                                        <FormattedText htmlText="{viewModel>note}" class="noteContent"/>
+                                                        <HBox visible="{path: 'viewModel>is_private', formatter: '.isPrivateNote'}" 
+                                                            class="sapUiTinyMarginTop">
+                                                            <core:Icon src="sap-icon://private" size="0.75rem" color="Neutral"/>
+                                                            <Text text="Private" class="sapUiTinyMarginBegin sapUiSmallText"/>
+                                                        </HBox>
+                                                    </VBox>
+                                                </content>
+                                            </Panel>
+                                        </VBox>
+                                        
+                                        <VBox visible="{
+                                            path: 'viewModel>/notes',
+                                            formatter: '.hasNoNotes'
+                                        }"
+                                            alignItems="Center"
+                                            justifyContent="Center"
+                                            class="sapUiLargeMarginVertical">
+                                            <core:Icon src="sap-icon://documents" size="3rem" color="Neutral"/>
+                                            <Text text="No notes yet" class="sapUiMediumMarginTop"/>
+                                            <Text text="Click 'Add Note' to create your first note" 
+                                                class="sapUiTinyText sapUiTinyMarginTop"/>
+                                        </VBox>
                                     </VBox>
                                 </uxap:blocks>
                             </uxap:ObjectPageSubSection>

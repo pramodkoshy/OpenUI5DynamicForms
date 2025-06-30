@@ -1,24 +1,33 @@
+// EntityDetail.controller.js extensions for Notes and Files management
+
 sap.ui.define([
     "com/supabase/easyui5/controller/BaseController",
     "sap/ui/model/json/JSONModel",
+    "sap/m/Dialog",
+    "sap/m/Button",
     "sap/m/Text",
     "sap/m/Input",
-    "sap/m/Label",
+    "sap/m/TextArea",
+    "sap/m/Select",
+    "sap/m/CheckBox",
+    "sap/m/MessageBox",
+    "sap/m/MessageToast",
+    "sap/m/Table",
     "sap/m/Column",
-    "sap/m/ColumnListItem"
+    "sap/m/ColumnListItem",
+    "sap/m/Label",
+    "sap/m/HBox",
+    "sap/m/VBox",
+    "sap/m/Panel",
+    "sap/ui/core/Item",
+    "sap/ui/unified/FileUploader"
 ], function(
-    BaseController, 
-    JSONModel, 
-    Text, 
-    Input, 
-    Label,
-    Column,
-    ColumnListItem
+    BaseController, JSONModel, Dialog, Button, Text, Input, TextArea, Select, CheckBox, 
+    MessageBox, MessageToast, Table, Column, ColumnListItem, Label, HBox, VBox, Panel, Item, FileUploader
 ) {
     "use strict";
 
-    return BaseController.extend("com.supabase.easyui5.controller.EntityDetail", {
-        
+    return BaseController.extend("com.supabase.easyui5.controller.EntityDetail", {  
         /**
          * Formatter methods for the view
          */
@@ -277,6 +286,7 @@ sap.ui.define([
                         // Load the data
                         console.log("🔍 ROUTE DEBUG: Now loading entity data");
                         this._loadEntity(sTableId, sEntityId);
+                        this._loadNotesAndFiles(sTableId, sEntityId);
                     })
                     .catch(error => {
                         console.error("🔍 ROUTE DEBUG: Error loading metadata:", error);
@@ -1914,12 +1924,8 @@ sap.ui.define([
             console.log("Form error states reset complete");
         },
 
-        /**
-         * Load entity data with enhanced debugging
-         * @param {string} sTableId The table ID
-         * @param {string} sEntityId The entity ID
-         * @private
-         */
+ 
+        // Updated _loadEntity method for EntityDetail.controller.js
         _loadEntity: function(sTableId, sEntityId) {
             console.log("🔍 ENTITY DEBUG: Starting _loadEntity method", {tableId: sTableId, entityId: sEntityId});
             
@@ -1945,7 +1951,6 @@ sap.ui.define([
                         })
                         .catch(error => {
                             console.error("🔍 ENTITY DEBUG: Error loading metadata:", error);
-                            console.error("🔍 ENTITY DEBUG: Error stack:", error.stack);
                             oViewModel.setProperty("/busy", false);
                         });
                 } else {
@@ -1954,7 +1959,6 @@ sap.ui.define([
                 }
             } catch (e) {
                 console.error("🔍 ENTITY DEBUG: Critical error in _loadEntity:", e);
-                console.error("🔍 ENTITY DEBUG: Error stack:", e.stack);
                 
                 // Try to set busy to false
                 try {
@@ -1968,13 +1972,7 @@ sap.ui.define([
             }
         },
 
-        /**
-         * Continue loading entity after metadata is available
-         * @param {string} sTableId The table ID
-         * @param {string} sEntityId The entity ID
-         * @param {Object} oMetadata The table metadata
-         * @private
-         */
+        // Updated _continueLoadingEntity with polymorphic relationship handling
         _continueLoadingEntity: function(sTableId, sEntityId, oMetadata) {
             console.log("🔍 ENTITY DEBUG: Continuing entity loading with metadata");
             
@@ -2028,6 +2026,30 @@ sap.ui.define([
                         }
                         
                         console.log("🔍 ENTITY DEBUG: Entity data loaded:", JSON.stringify(data, null, 2));
+                        
+                        // Check if this table has an entity_id field for polymorphic relationship
+                        const hasEntityId = oMetadata.columns.some(col => col.name === "entity_id");
+                        
+                        // Load entity data if available (for polymorphic relationship)
+                        if (hasEntityId && data.entity_id) {
+                            try {
+                                console.log("🔍 ENTITY DEBUG: Loading polymorphic entity data for entity_id:", data.entity_id);
+                                
+                                const { data: entityData, error: entityError } = await this.getSupabaseClient()
+                                    .from("entities")
+                                    .select('*')
+                                    .eq("entity_id", data.entity_id)
+                                    .single();
+                                    
+                                if (!entityError && entityData) {
+                                    console.log("🔍 ENTITY DEBUG: Loaded entity data:", entityData);
+                                    // Merge entity data with the current data
+                                    data.entity_data = entityData;
+                                }
+                            } catch (e) {
+                                console.error("🔍 ENTITY DEBUG: Error loading entity data:", e);
+                            }
+                        }
                         
                         // Process relation fields
                         console.log("🔍 ENTITY DEBUG: Processing relation fields");
@@ -2096,12 +2118,10 @@ sap.ui.define([
                     })
                     .catch(error => {
                         console.error("🔍 ENTITY DEBUG: Error in Supabase query:", error);
-                        console.error("🔍 ENTITY DEBUG: Error stack:", error.stack);
                         oViewModel.setProperty("/busy", false);
                     });
             } catch (e) {
                 console.error("🔍 ENTITY DEBUG: Critical error in _continueLoadingEntity:", e);
-                console.error("🔍 ENTITY DEBUG: Error stack:", e.stack);
                 
                 // Try to set busy to false
                 try {
@@ -2124,143 +2144,217 @@ sap.ui.define([
          */
         _loadRelatedItems: function(oMetadata, oEntityData) {
             console.log("🔍 RELATED DEBUG: Starting _loadRelatedItems method");
-            console.log("🔍 RELATED DEBUG: Metadata:", JSON.stringify(oMetadata, null, 2));
-            console.log("🔍 RELATED DEBUG: Entity data:", JSON.stringify(oEntityData, null, 2));
             
             try {
                 const oViewModel = this.getModel("viewModel");
+                const sTableId = oViewModel.getProperty("/tableId");
                 
-                if (!oViewModel) {
-                    console.error("🔍 RELATED DEBUG: viewModel not found! Aborting method.");
-                    return;
+                // Make the related items section visible
+                const oRelatedItemsSection = this.getView().byId("relatedItemsSection");
+                if (oRelatedItemsSection) {
+                    oRelatedItemsSection.setVisible(true);
                 }
                 
-                const sTableId = oViewModel.getProperty("/tableId");
-                console.log("🔍 RELATED DEBUG: Table ID from viewModel:", sTableId);
+                // Check for polymorphic relationship via entities table
+                const hasEntityId = oMetadata.columns.some(col => col.name === "entity_id");
+                let entityId = null;
                 
-                // CRITICAL: Always make the related items section visible regardless of data
-                const oRelatedItemsSection = this.getView().byId("relatedItemsSection");
-                console.log("🔍 RELATED DEBUG: Related items section found?", !!oRelatedItemsSection);
-                
-                if (oRelatedItemsSection) {
-                    console.log("🔍 RELATED DEBUG: Setting related items section to ALWAYS visible");
-                    oRelatedItemsSection.setVisible(true);
-                } else {
-                    console.error("🔍 RELATED DEBUG: Related items section not found in view! Check the ID in your XML");
+                if (hasEntityId && oEntityData.entity_id) {
+                    entityId = oEntityData.entity_id;
+                    console.log("🔍 RELATED DEBUG: Using polymorphic relationship via entity_id:", entityId);
                 }
                 
                 // Check if relations exist
-                console.log("🔍 RELATED DEBUG: Checking for relations in metadata");
-                if (!oMetadata.relations || oMetadata.relations.length === 0) {
+                const hasStandardRelations = oMetadata.relations && oMetadata.relations.length > 0;
+                
+                // If no relations and no entity_id, we can't load related items
+                if (!hasStandardRelations && !entityId) {
                     console.log("🔍 RELATED DEBUG: No relations defined for table:", sTableId);
-                    
-                    // Even with no relations, we keep the section visible, just empty
-                    console.log("🔍 RELATED DEBUG: Setting empty arrays for items");
                     oViewModel.setProperty("/relatedItems", []);
                     oViewModel.setProperty("/filteredRelatedItems", []);
-                    
-                    // Still call configure table to set up the structure
-                    console.log("🔍 RELATED DEBUG: Calling _configureRelatedItemsTable with empty data");
                     this._configureRelatedItemsTable(sTableId);
-                    
                     oViewModel.setProperty("/busy", false);
                     return;
                 }
                 
-                const oRelation = oMetadata.relations[0];
-                console.log("🔍 RELATED DEBUG: Found relation:", JSON.stringify(oRelation));
-                
-                // Use appropriate primary key with extended debugging
+                // Use appropriate primary key
                 const sPrimaryKey = oMetadata.primaryKey || `${sTableId}_id`;
-                console.log("🔍 RELATED DEBUG: Using primary key:", sPrimaryKey);
-                
-                // Check if the primary key exists in entity data
-                console.log("🔍 RELATED DEBUG: Entity data keys:", Object.keys(oEntityData).join(", "));
-                console.log("🔍 RELATED DEBUG: Primary key value:", oEntityData[sPrimaryKey]);
-                
                 const sPrimaryKeyValue = oEntityData[sPrimaryKey];
                 
-                if (!sPrimaryKeyValue) {
+                if (!sPrimaryKeyValue && !entityId) {
                     console.error("🔍 RELATED DEBUG: Primary key value not found in entity data!");
-                    console.log("🔍 RELATED DEBUG: Setting empty arrays for related items");
-                    
-                    // Even with no primary key, we keep the section visible with empty data
                     oViewModel.setProperty("/relatedItems", []);
                     oViewModel.setProperty("/filteredRelatedItems", []);
-                    
-                    // Still call configure table to set up the structure
-                    console.log("🔍 RELATED DEBUG: Calling _configureRelatedItemsTable with empty data");
                     this._configureRelatedItemsTable(sTableId);
-                    
                     oViewModel.setProperty("/busy", false);
                     return;
                 }
                 
-                // Everything looks good, display the query we're about to run
-                console.log(`🔍 RELATED DEBUG: Will query: ${oRelation.table}.select('*').eq('${oRelation.foreignKey}', '${sPrimaryKeyValue}')`);
+                // Prepare to collect all related items from different sources
+                let allRelatedItemsPromises = [];
                 
-                // Check if Supabase client is available
-                if (!this.getSupabaseClient()) {
-                    console.error("🔍 RELATED DEBUG: Supabase client not available!");
-                    oViewModel.setProperty("/busy", false);
-                    return;
-                }
-                
-                // Fetch related items with try-catch
-                try {
-                    console.log("🔍 RELATED DEBUG: Executing Supabase query");
+                // 1. First, check standard relations if available
+                if (hasStandardRelations) {
+                    const oRelation = oMetadata.relations[0];
+                    console.log(`🔍 RELATED DEBUG: Loading standard relation data from ${oRelation.table} where ${oRelation.foreignKey}=${sPrimaryKeyValue}`);
                     
-                    this.getSupabaseClient()
+                    const standardRelationPromise = this.getSupabaseClient()
                         .from(oRelation.table)
                         .select('*')
                         .eq(oRelation.foreignKey, sPrimaryKeyValue)
-                        .then(({ data: relatedData, error }) => {
-                            console.log("🔍 RELATED DEBUG: Supabase query completed");
-                            
+                        .then(({ data, error }) => {
                             if (error) {
-                                console.error("🔍 RELATED DEBUG: Error loading related items:", error);
-                                oViewModel.setProperty("/busy", false);
-                                return;
+                                console.error("🔍 RELATED DEBUG: Error loading standard relation items:", error);
+                                return [];
                             }
                             
-                            console.log("🔍 RELATED DEBUG: Related items loaded:", relatedData ? relatedData.length : 0);
-                            console.log("🔍 RELATED DEBUG: Full related items data:", JSON.stringify(relatedData));
+                            const items = data || [];
+                            console.log(`🔍 RELATED DEBUG: Loaded ${items.length} standard relation items`);
                             
-                            // First set the model data
-                            console.log("🔍 RELATED DEBUG: Setting model data for related items");
-                            oViewModel.setProperty("/relatedItems", relatedData || []);
-                            oViewModel.setProperty("/filteredRelatedItems", relatedData || []);
-                            
-                            // Verify data was set correctly
-                            const aModelItems = oViewModel.getProperty("/filteredRelatedItems");
-                            console.log("🔍 RELATED DEBUG: Model data set, count:", aModelItems.length);
-                            
-                            // Configure the table AFTER setting the data
-                            console.log("🔍 RELATED DEBUG: Now configuring the table");
-                            this._configureRelatedItemsTable(oRelation.table);
-                            
-                            // Set busy to false
-                            oViewModel.setProperty("/busy", false);
-                            console.log("🔍 RELATED DEBUG: _loadRelatedItems completed successfully");
+                            // Process relations for these items
+                            return this._processRelatedItemsRelations(oRelation.table, items);
                         })
                         .catch(error => {
-                            console.error("🔍 RELATED DEBUG: Error in Supabase query:", error);
-                            console.error("🔍 RELATED DEBUG: Error stack:", error.stack);
-                            oViewModel.setProperty("/busy", false);
+                            console.error("🔍 RELATED DEBUG: Error in standard relation query:", error);
+                            return [];
                         });
-                } catch (queryError) {
-                    console.error("🔍 RELATED DEBUG: Exception during Supabase query:", queryError);
-                    console.error("🔍 RELATED DEBUG: Error stack:", queryError.stack);
-                    oViewModel.setProperty("/busy", false);
+                        
+                    allRelatedItemsPromises.push(standardRelationPromise);
                 }
+                
+                // 2. Check for polymorphic relations via entity_id
+                if (entityId) {
+                    console.log(`🔍 RELATED DEBUG: Loading polymorphic relation data for entity_id ${entityId}`);
+                    
+                    // Look for items in notes table that reference this entity
+                    const notesPromise = this.getSupabaseClient()
+                        .from("notes")
+                        .select('*')
+                        .eq("entity_id", entityId)
+                        .then(({ data, error }) => {
+                            if (error) {
+                                console.error("🔍 RELATED DEBUG: Error loading notes:", error);
+                                return [];
+                            }
+                            
+                            const items = data || [];
+                            console.log(`🔍 RELATED DEBUG: Loaded ${items.length} notes`);
+                            
+                            // Add a type indicator for UI display
+                            items.forEach(item => {
+                                item._item_type = "Note";
+                                item._relation_type = "polymorphic";
+                            });
+                            
+                            return items;
+                        })
+                        .catch(error => {
+                            console.error("🔍 RELATED DEBUG: Error in notes query:", error);
+                            return [];
+                        });
+                        
+                    allRelatedItemsPromises.push(notesPromise);
+                    
+                    // Look for items in files table that reference this entity
+                    const filesPromise = this.getSupabaseClient()
+                        .from("files")
+                        .select('*')
+                        .eq("entity_id", entityId)
+                        .then(({ data, error }) => {
+                            if (error) {
+                                console.error("🔍 RELATED DEBUG: Error loading files:", error);
+                                return [];
+                            }
+                            
+                            const items = data || [];
+                            console.log(`🔍 RELATED DEBUG: Loaded ${items.length} files`);
+                            
+                            // Add a type indicator for UI display
+                            items.forEach(item => {
+                                item._item_type = "File";
+                                item._relation_type = "polymorphic";
+                            });
+                            
+                            return items;
+                        })
+                        .catch(error => {
+                            console.error("🔍 RELATED DEBUG: Error in files query:", error);
+                            return [];
+                        });
+                        
+                    allRelatedItemsPromises.push(filesPromise);
+                    
+                    // Look for items in entity_tags table that reference this entity
+                    const tagsPromise = this.getSupabaseClient()
+                        .from("entity_tags")
+                        .select('*, tags(*)')
+                        .eq("entity_id", entityId)
+                        .then(({ data, error }) => {
+                            if (error) {
+                                console.error("🔍 RELATED DEBUG: Error loading entity_tags:", error);
+                                return [];
+                            }
+                            
+                            const items = data || [];
+                            console.log(`🔍 RELATED DEBUG: Loaded ${items.length} entity_tags`);
+                            
+                            // Add a type indicator for UI display and merge tag data
+                            items.forEach(item => {
+                                item._item_type = "Tag";
+                                item._relation_type = "polymorphic";
+                                if (item.tags) {
+                                    item.name = item.tags.name;
+                                    item.category = item.tags.category;
+                                    item.color = item.tags.color;
+                                }
+                            });
+                            
+                            return items;
+                        })
+                        .catch(error => {
+                            console.error("🔍 RELATED DEBUG: Error in entity_tags query:", error);
+                            return [];
+                        });
+                        
+                    allRelatedItemsPromises.push(tagsPromise);
+                }
+                
+                // Wait for all relation queries to complete
+                Promise.all(allRelatedItemsPromises)
+                    .then(relatedItemsArrays => {
+                        // Flatten all arrays of related items
+                        const allRelatedItems = [].concat(...relatedItemsArrays);
+                        console.log(`🔍 RELATED DEBUG: Combined ${allRelatedItems.length} related items from all sources`);
+                        
+                        // Set the data in the model
+                        oViewModel.setProperty("/relatedItems", allRelatedItems);
+                        oViewModel.setProperty("/filteredRelatedItems", allRelatedItems);
+                        
+                        // Update delete button state based on related items
+                        this._updateDeleteButtonState(allRelatedItems);
+                        
+                        // Configure and setup the related items table
+                        this._configureRelatedItemsTable(sTableId);
+                        
+                        oViewModel.setProperty("/busy", false);
+                        console.log("🔍 RELATED DEBUG: Related items loading complete");
+                        
+                        return allRelatedItems;
+                    })
+                    .catch(error => {
+                        console.error("🔍 RELATED DEBUG: Error loading related items:", error);
+                        oViewModel.setProperty("/busy", false);
+                        return [];
+                    });
             } catch (e) {
                 console.error("🔍 RELATED DEBUG: Critical error in _loadRelatedItems:", e);
-                console.error("🔍 RELATED DEBUG: Error stack:", e.stack);
                 
                 const oViewModel = this.getModel("viewModel");
                 if (oViewModel) {
                     oViewModel.setProperty("/busy", false);
                 }
+                
+                return Promise.resolve([]);
             }
         },
         
@@ -2675,5 +2769,755 @@ sap.ui.define([
             this.getView().addDependent(oEditDialog);
             oEditDialog.open();
         },
+
+          /**
+         * Load notes and files for the current entity
+         * @param {string} sTableId The table ID
+         * @param {string} sEntityId The entity ID
+         * @private
+         */
+          _loadNotesAndFiles: function(sTableId, sEntityId) {
+            console.log("Loading notes and files for entity:", sTableId, sEntityId);
+            
+            const oViewModel = this.getModel("viewModel");
+            
+            // Ensure notes and files arrays exist in the model
+            if (!oViewModel.getProperty("/notes")) {
+                oViewModel.setProperty("/notes", []);
+            }
+            if (!oViewModel.getProperty("/files")) {
+                oViewModel.setProperty("/files", []);
+            }
+            
+            // Get entity type for polymorphic queries
+            const sEntityType = sTableId.replace(/_$/, ''); // Remove trailing underscore if exists
+            
+            // Load Notes
+            this.getSupabaseClient()
+                .from("notes")
+                .select('*')
+                .eq("entity_id", sEntityId)
+                .eq("entity_type", sEntityType)
+                .order('created_at', { ascending: false })
+                .then(({ data, error }) => {
+                    if (error) {
+                        console.error("Error loading notes:", error);
+                        return;
+                    }
+                    
+                    oViewModel.setProperty("/notes", data || []);
+                    console.log(`Loaded ${data?.length || 0} notes`);
+                });
+
+            // Load Files
+            this.getSupabaseClient()
+                .from("files")
+                .select('*')
+                .eq("entity_id", sEntityId)
+                .eq("entity_type", sEntityType)
+                .order('created_at', { ascending: false })
+                .then(({ data, error }) => {
+                    if (error) {
+                        console.error("Error loading files:", error);
+                        return;
+                    }
+                    
+                    oViewModel.setProperty("/files", data || []);
+                    console.log(`Loaded ${data?.length || 0} files`);
+                });
+        },
+
+        /**
+         * Handler for Add Note button
+         */
+        onAddNote: function() {
+            const oViewModel = this.getModel("viewModel");
+            const sTableId = oViewModel.getProperty("/tableId");
+            const sEntityId = oViewModel.getProperty("/entityId");
+            
+            if (!this._oNoteDialog) {
+                this._oNoteDialog = new Dialog({
+                    title: "Add Note",
+                    contentWidth: "600px",
+                    content: [
+                        new VBox({
+                            items: [
+                                new Label({ text: "Title", required: true }),
+                                new Input({ id: this.createId("noteTitle"), width: "100%" }),
+                                new Label({ text: "Content", required: true }),
+                                new TextArea({ 
+                                    id: this.createId("noteContent"), 
+                                    width: "100%", 
+                                    rows: 6,
+                                    growing: true 
+                                }),
+                                new Label({ text: "Category" }),
+                                new Select({
+                                    id: this.createId("noteCategory"),
+                                    width: "100%",
+                                    items: [
+                                        new Item({ key: "general", text: "General" }),
+                                        new Item({ key: "meeting", text: "Meeting" }),
+                                        new Item({ key: "task", text: "Task" }),
+                                        new Item({ key: "reminder", text: "Reminder" })
+                                    ]
+                                }),
+                                new CheckBox({
+                                    id: this.createId("notePrivate"),
+                                    text: "Private Note",
+                                    selected: false
+                                })
+                            ]
+                        }).addStyleClass("sapUiMediumMargin")
+                    ],
+                    beginButton: new Button({
+                        text: "Save",
+                        type: "Emphasized",
+                        press: this._saveNote.bind(this)
+                    }),
+                    endButton: new Button({
+                        text: "Cancel",
+                        press: function() {
+                            this._oNoteDialog.close();
+                        }.bind(this)
+                    }),
+                    afterClose: function() {
+                        // Reset form fields
+                        this.byId("noteTitle").setValue("");
+                        this.byId("noteContent").setValue("");
+                        this.byId("noteCategory").setSelectedKey("general");
+                        this.byId("notePrivate").setSelected(false);
+                    }.bind(this)
+                });
+                
+                this.getView().addDependent(this._oNoteDialog);
+            }
+            
+            this._oNoteDialog.open();
+        },
+
+        /**
+         * Save a new note
+         * @private
+         */
+        _saveNote: function() {
+            const oViewModel = this.getModel("viewModel");
+            const sTableId = oViewModel.getProperty("/tableId");
+            const sEntityId = oViewModel.getProperty("/entityId");
+            const sEntityType = sTableId.replace(/_$/, ''); // Remove trailing underscore if exists
+            
+            const sTitle = this.byId("noteTitle").getValue();
+            const sContent = this.byId("noteContent").getValue();
+            const sCategory = this.byId("noteCategory").getSelectedKey();
+            const bIsPrivate = this.byId("notePrivate").getSelected();
+            
+            if (!sTitle || !sContent) {
+                MessageBox.error("Please enter both title and content for the note.");
+                return;
+            }
+            
+            // Prepare note data
+            const oNoteData = {
+                entity_id: sEntityId,
+                entity_type: sEntityType,
+                title: sTitle,
+                note: sContent,
+                category: sCategory || "general",
+                is_private: bIsPrivate,
+                created_by: "Current User", // You might want to get this from user session
+                created_at: new Date().toISOString()
+            };
+            
+            // Save to Supabase
+            this.getSupabaseClient()
+                .from("notes")
+                .insert(oNoteData)
+                .then(({ data, error }) => {
+                    if (error) {
+                        console.error("Error saving note:", error);
+                        MessageBox.error("Failed to save note: " + error.message);
+                        return;
+                    }
+                    
+                    MessageToast.show("Note saved successfully");
+                    this._oNoteDialog.close();
+                    
+                    // Reload notes
+                    this._loadNotesAndFiles(sTableId, sEntityId);
+                })
+                .catch(error => {
+                    console.error("Error in Supabase query:", error);
+                    MessageBox.error("Failed to save note.");
+                });
+        },
+
+      
+     
+        /**
+         * Handler for Edit Note
+         */
+        onEditNote: function(oEvent) {
+            const oSource = oEvent.getSource();
+            const oContext = oSource.getBindingContext("viewModel");
+            const oNoteData = oContext.getObject();
+            
+            this._openNoteEditDialog(oNoteData);
+        },
+
+        /**
+         * Handler for Delete Note
+         */
+        onDeleteNote: function(oEvent) {
+            const oSource = oEvent.getSource();
+            const oContext = oSource.getBindingContext("viewModel");
+            const oNoteData = oContext.getObject();
+            
+            MessageBox.confirm(
+                "Are you sure you want to delete this note?",
+                {
+                    title: "Delete Confirmation",
+                    actions: [MessageBox.Action.YES, MessageBox.Action.NO],
+                    onClose: (sAction) => {
+                        if (sAction === MessageBox.Action.YES) {
+                            this._deleteNote(oNoteData.note_id);
+                        }
+                    }
+                }
+            );
+        },
+
+        /**
+         * Handler for Edit File
+         */
+        onEditFile: function(oEvent) {
+            const oSource = oEvent.getSource();
+            const oContext = oSource.getBindingContext("viewModel");
+            const oFileData = oContext.getObject();
+            
+            this._openFileEditDialog(oFileData);
+        },
+
+   
+        /**
+         * Open edit dialog for note
+         * @private
+         */
+        _openNoteEditDialog: function(oNoteData) {
+            if (!this._oNoteEditDialog) {
+                this._oNoteEditDialog = new Dialog({
+                    title: "Edit Note",
+                    contentWidth: "600px",
+                    content: [
+                        new VBox({
+                            items: [
+                                new Label({ text: "Title", required: true }),
+                                new Input({ id: this.createId("editNoteTitle"), width: "100%" }),
+                                new Label({ text: "Content", required: true }),
+                                new TextArea({ 
+                                    id: this.createId("editNoteContent"), 
+                                    width: "100%", 
+                                    rows: 6,
+                                    growing: true 
+                                }),
+                                new Label({ text: "Category" }),
+                                new Select({
+                                    id: this.createId("editNoteCategory"),
+                                    width: "100%",
+                                    items: [
+                                        new Item({ key: "general", text: "General" }),
+                                        new Item({ key: "meeting", text: "Meeting" }),
+                                        new Item({ key: "task", text: "Task" }),
+                                        new Item({ key: "reminder", text: "Reminder" })
+                                    ]
+                                }),
+                                new CheckBox({
+                                    id: this.createId("editNotePrivate"),
+                                    text: "Private Note",
+                                    selected: false
+                                })
+                            ]
+                        }).addStyleClass("sapUiMediumMargin")
+                    ],
+                    beginButton: new Button({
+                        text: "Save Changes",
+                        type: "Emphasized",
+                        press: () => {
+                            this._updateNote(oNoteData.note_id);
+                        }
+                    }),
+                    endButton: new Button({
+                        text: "Cancel",
+                        press: () => {
+                            this._oNoteEditDialog.close();
+                        }
+                    })
+                });
+                
+                this.getView().addDependent(this._oNoteEditDialog);
+            }
+            
+            // Populate form with existing data
+            this.byId("editNoteTitle").setValue(oNoteData.title);
+            this.byId("editNoteContent").setValue(oNoteData.note);
+            this.byId("editNoteCategory").setSelectedKey(oNoteData.category || "general");
+            this.byId("editNotePrivate").setSelected(oNoteData.is_private || false);
+            
+            this._oNoteEditDialog.open();
+        },
+
+        /**
+         * Delete a note
+         * @private
+         */
+        _deleteNote: function(sNoteId) {
+            const oViewModel = this.getModel("viewModel");
+            const sTableId = oViewModel.getProperty("/tableId");
+            const sEntityId = oViewModel.getProperty("/entityId");
+            
+            this.getSupabaseClient()
+                .from("notes")
+                .delete()
+                .eq("note_id", sNoteId)
+                .then(({ error }) => {
+                    if (error) {
+                        console.error("Error deleting note:", error);
+                        MessageBox.error("Failed to delete note: " + error.message);
+                        return;
+                    }
+                    
+                    MessageToast.show("Note deleted successfully");
+                    this._loadNotesAndFiles(sTableId, sEntityId);
+                })
+                .catch(error => {
+                    console.error("Error in Supabase query:", error);
+                    MessageBox.error("Failed to delete note.");
+                });
+        },
+
+        /**
+         * Delete a file
+         * @private
+         */
+        _deleteFile: function(sFileId) {
+            const oViewModel = this.getModel("viewModel");
+            const sTableId = oViewModel.getProperty("/tableId");
+            const sEntityId = oViewModel.getProperty("/entityId");
+            
+            this.getSupabaseClient()
+                .from("files")
+                .delete()
+                .eq("file_id", sFileId)
+                .then(({ error }) => {
+                    if (error) {
+                        console.error("Error deleting file:", error);
+                        MessageBox.error("Failed to delete file: " + error.message);
+                        return;
+                    }
+                    
+                    MessageToast.show("File deleted successfully");
+                    this._loadNotesAndFiles(sTableId, sEntityId);
+                })
+                .catch(error => {
+                    console.error("Error in Supabase query:", error);
+                    MessageBox.error("Failed to delete file.");
+                });
+        },
+
+
+        /**
+         * Format file size from KB to human readable format
+         * @param {number} sizeInKB Size in kilobytes
+         * @returns {string} Formatted file size
+         */
+        formatFileSize: function(sizeInKB) {
+            if (!sizeInKB) return "0 B";
+            
+            if (sizeInKB < 1024) {
+                return Math.round(sizeInKB) + " KB";
+            } else if (sizeInKB < 1024 * 1024) {
+                return (sizeInKB / 1024).toFixed(1) + " MB";
+            } else {
+                return (sizeInKB / (1024 * 1024)).toFixed(1) + " GB";
+            }
+        },
+
+        /**
+         * Format date to readable string
+         * @param {string} dateString ISO date string
+         * @returns {string} Formatted date
+         */
+        formatDate: function(dateString) {
+            if (!dateString) return "";
+            
+            const date = new Date(dateString);
+            const now = new Date();
+            const diffMs = now - date;
+            const diffMins = Math.round(diffMs / 60000);
+            const diffHours = Math.round(diffMs / 3600000);
+            const diffDays = Math.round(diffMs / 86400000);
+            
+            if (diffMins < 1) {
+                return "just now";
+            } else if (diffMins < 60) {
+                return diffMins + " mins ago";
+            } else if (diffHours < 24) {
+                return diffHours + " hours ago";
+            } else if (diffDays === 1) {
+                return "yesterday";
+            } else if (diffDays < 7) {
+                return diffDays + " days ago";
+            } else {
+                return date.toLocaleDateString('en-US', { 
+                    year: 'numeric', 
+                    month: 'short', 
+                    day: 'numeric' 
+                });
+            }
+        },
+
+        /**
+         * Format category name
+         * @param {string} category Category key
+         * @returns {string} Formatted category name
+         */
+        formatCategory: function(category) {
+            if (!category) return "";
+            
+            const categories = {
+                "general": "General",
+                "meeting": "Meeting",
+                "task": "Task",
+                "reminder": "Reminder",
+                "document": "Document",
+                "image": "Image",
+                "spreadsheet": "Spreadsheet",
+                "presentation": "Presentation",
+                "other": "Other"
+            };
+            
+            return categories[category] || category.charAt(0).toUpperCase() + category.slice(1);
+        },
+
+        /**
+         * Check if note is private
+         * @param {boolean} isPrivate Private flag
+         * @returns {boolean} Whether to show private indicator
+         */
+        isPrivateNote: function(isPrivate) {
+            return !!isPrivate;
+        },
+
+        /**
+         * Check if there are no notes
+         * @param {Array} notes Array of notes
+         * @returns {boolean} True if no notes
+         */
+        hasNoNotes: function(notes) {
+            return !notes || notes.length === 0;
+        },
+
+        /**
+         * Additional event handlers
+         */
+
+        /**
+         * Create initial entity record with notes and files support
+         */
+        _createEntityWithNotesFiles: function(sTableId, oEntityData) {
+            const sEntityType = sTableId.replace(/_$/, '');
+            
+            // First create entity record
+            return this.getSupabaseClient()
+                .from("entities")
+                .insert({
+                    entity_type: sEntityType,
+                    name: oEntityData.name || oEntityData[Object.keys(oEntityData)[1]], // Use appropriate field
+                    description: oEntityData.description || ""
+                })
+                .select()
+                .then(({ data: entityData, error: entityError }) => {
+                    if (entityError) throw new Error("Failed to create entity record");
+                    
+                    const sEntityId = entityData[0].entity_id;
+                    
+                    // Update main entity data with entity_id
+                    const oDataWithEntityId = {
+                        ...oEntityData,
+                        entity_id: sEntityId
+                    };
+                    
+                    // Create main record
+                    return this.getSupabaseClient()
+                        .from(sTableId)
+                        .insert(oDataWithEntityId)
+                        .select()
+                        .then(({ data, error }) => {
+                            if (error) {
+                                // Rollback entity creation if main record fails
+                                this.getSupabaseClient()
+                                    .from("entities")
+                                    .delete()
+                                    .eq("entity_id", sEntityId);
+                                throw error;
+                            }
+                            return data;
+                        });
+                });
+        },
+
+  
+        // File upload handler for EntityDetail.controller.js
+        // Replace your existing _uploadFile method with this one
+
+        _uploadFile: function(oFile) {
+            const supabase = this.getSupabaseClient();
+            const oViewModel = this.getModel("viewModel");
+            const sEntityId = oViewModel.getProperty("/entityId");
+            const sTableName = oViewModel.getProperty("/tableName");
+            
+            if (!oFile || !sEntityId) {
+                sap.m.MessageToast.show("Invalid file or entity");
+                return;
+            }
+            
+            // Clean up table name for storage path (remove trailing 's' if present)
+            let sEntityType = sTableName.toLowerCase();
+            if (sEntityType.endsWith('s')) {
+                sEntityType = sEntityType.slice(0, -1);
+            }
+            
+            // Generate unique file name with simpler format
+            const sTimestamp = Date.now();
+            const sOriginalName = oFile.name;
+            const sFileExtension = sOriginalName.split('.').pop().toLowerCase();
+            // Create a simpler storage path without special characters
+            const sStorageFileName = `${sEntityType}_${sEntityId}_${sTimestamp}.${sFileExtension}`;
+            
+            // Show busy indicator
+            oViewModel.setProperty("/uploadingFile", true);
+            
+            // Upload function
+            const uploadToStorage = async () => {
+                try {
+                    console.log("Uploading file:", sOriginalName, "as:", sStorageFileName);
+                    
+                    // First check if the bucket exists and is properly configured
+                    // Try uploading to a general 'uploads' bucket instead of 'files'
+                    const bucketName = 'uploads'; // Make sure this bucket exists in your Supabase Storage
+                    
+                    // Upload to storage bucket
+                    const { data: storageData, error: storageError } = await supabase.storage
+                        .from(bucketName)
+                        .upload(sStorageFileName, oFile, {
+                            cacheControl: '3600',
+                            upsert: true // Allow overwriting if file exists
+                        });
+                    
+                    if (storageError) {
+                        console.error("Storage upload error:", storageError);
+                        
+                        // If bucket doesn't exist, provide helpful message
+                        if (storageError.message && storageError.message.includes('bucket')) {
+                            throw new Error(`Storage bucket '${bucketName}' not found. Please create it in Supabase Storage.`);
+                        }
+                        throw storageError;
+                    }
+                    
+                    console.log("File uploaded to storage:", storageData);
+                    
+                    // Get the public URL (if bucket is public)
+                    const { data: urlData } = supabase.storage
+                        .from(bucketName)
+                        .getPublicUrl(sStorageFileName);
+                    
+                    // Prepare file metadata for database
+                    const oFileMetadata = {
+                        entity_id: sEntityId,
+                        entity_type: sTableName.toLowerCase(),
+                        file_name: sOriginalName,
+                        original_name: sOriginalName,
+                        file_type: sFileExtension,
+                        file_size: Math.round(oFile.size / 1024), // Convert to KB
+                        mime_type: oFile.type || 'application/octet-stream',
+                        storage_path: `${bucketName}/${sStorageFileName}`, // Full path including bucket
+                        public_url: urlData?.publicUrl || null,
+                        description: "",
+                        category: "document",
+                        is_private: false,
+                        uploaded_by: "system" // Replace with actual user when auth is implemented
+                    };
+                    
+                    console.log("Inserting file metadata:", oFileMetadata);
+                    
+                    // Save file metadata to database
+                    const { data: fileRecord, error: dbError } = await supabase
+                        .from('files')
+                        .insert(oFileMetadata)
+                        .select()
+                        .single();
+                    
+                    if (dbError) {
+                        console.error("Database error:", dbError);
+                        
+                        // If database insert fails, try to clean up the uploaded file
+                        try {
+                            await supabase.storage
+                                .from(bucketName)
+                                .remove([sStorageFileName]);
+                        } catch (cleanupError) {
+                            console.error("Cleanup error:", cleanupError);
+                        }
+                        
+                        throw dbError;
+                    }
+                    
+                    console.log("File metadata saved:", fileRecord);
+                    
+                    // Update the view model with the new file
+                    const aCurrentFiles = oViewModel.getProperty("/files") || [];
+                    aCurrentFiles.unshift(fileRecord); // Add to beginning of array
+                    oViewModel.setProperty("/files", aCurrentFiles);
+                    
+                    sap.m.MessageToast.show("File uploaded successfully");
+                    
+                } catch (error) {
+                    console.error("Error uploading file:", error);
+                    let errorMessage = "Error uploading file: ";
+                    
+                    if (error.message) {
+                        errorMessage += error.message;
+                    } else if (error.code) {
+                        errorMessage += error.code;
+                    } else {
+                        errorMessage += "Unknown error";
+                    }
+                    
+                    sap.m.MessageToast.show(errorMessage);
+                } finally {
+                    oViewModel.setProperty("/uploadingFile", false);
+                }
+            };
+            
+            // Execute the upload
+            uploadToStorage();
+        },
+
+        // File selection dialog
+        onAddFile: function() {
+            const oFileInput = document.createElement("input");
+            oFileInput.type = "file";
+            
+            // You can restrict file types here
+            // oFileInput.accept = "image/*,application/pdf,.doc,.docx,.xls,.xlsx";
+            
+            oFileInput.onchange = (oEvent) => {
+                const aFiles = oEvent.target.files;
+                if (aFiles && aFiles.length > 0) {
+                    const oFile = aFiles[0];
+                    
+                    // Basic validation
+                    const maxSize = 10 * 1024 * 1024; // 10MB
+                    if (oFile.size > maxSize) {
+                        sap.m.MessageToast.show("File size exceeds 10MB limit");
+                        return;
+                    }
+                    
+                    this._uploadFile(oFile);
+                }
+            };
+            
+            oFileInput.click();
+        },
+
+        // View/Download file
+        onViewFile: function(oEvent) {
+            const oSource = oEvent.getSource();
+            const oContext = oSource.getBindingContext("viewModel");
+            const oFile = oContext.getObject();
+            
+            if (oFile.public_url) {
+                // Open in new tab
+                window.open(oFile.public_url, '_blank');
+            } else if (oFile.storage_path) {
+                // Try to generate a download URL
+                const supabase = this.getSupabaseClient();
+                const [bucketName, ...pathParts] = oFile.storage_path.split('/');
+                const filePath = pathParts.join('/');
+                
+                supabase.storage
+                    .from(bucketName)
+                    .createSignedUrl(filePath, 3600) // 1 hour expiry
+                    .then(({ data, error }) => {
+                        if (error) {
+                            console.error("Error creating signed URL:", error);
+                            sap.m.MessageToast.show("Unable to view file");
+                        } else if (data?.signedUrl) {
+                            window.open(data.signedUrl, '_blank');
+                        }
+                    });
+            } else {
+                sap.m.MessageToast.show("File URL not available");
+            }
+        },
+
+        // Delete file handler
+        onDeleteFile: function(oEvent) {
+            const oSource = oEvent.getSource();
+            const oContext = oSource.getBindingContext("viewModel");
+            const oFile = oContext.getObject();
+            
+            sap.m.MessageBox.confirm("Are you sure you want to delete this file?", {
+                actions: [sap.m.MessageBox.Action.YES, sap.m.MessageBox.Action.NO],
+                onClose: async (sAction) => {
+                    if (sAction === sap.m.MessageBox.Action.YES) {
+                        try {
+                            const supabase = this.getSupabaseClient();
+                            
+                            // Delete from storage first
+                            if (oFile.storage_path) {
+                                const [bucketName, ...pathParts] = oFile.storage_path.split('/');
+                                const filePath = pathParts.join('/');
+                                
+                                const { error: storageError } = await supabase.storage
+                                    .from(bucketName)
+                                    .remove([filePath]);
+                                
+                                if (storageError) {
+                                    console.error("Error deleting from storage:", storageError);
+                                    // Continue to delete metadata even if storage deletion fails
+                                }
+                            }
+                            
+                            // Delete metadata from database
+                            const { error: dbError } = await supabase
+                                .from('files')
+                                .delete()
+                                .eq('file_id', oFile.file_id);
+                            
+                            if (dbError) {
+                                throw dbError;
+                            }
+                            
+                            // Update view model
+                            const oViewModel = this.getModel("viewModel");
+                            const aFiles = oViewModel.getProperty("/files");
+                            const iIndex = aFiles.findIndex(f => f.file_id === oFile.file_id);
+                            
+                            if (iIndex > -1) {
+                                aFiles.splice(iIndex, 1);
+                                oViewModel.setProperty("/files", aFiles);
+                            }
+                            
+                            sap.m.MessageToast.show("File deleted successfully");
+                            
+                        } catch (error) {
+                            console.error("Error deleting file:", error);
+                            sap.m.MessageToast.show("Error deleting file: " + error.message);
+                        }
+                    }
+                }
+            });
+        }
+    
     });
 });

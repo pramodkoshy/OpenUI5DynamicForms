@@ -24,9 +24,7 @@ sap.ui.define([
     return BaseController.extend("com.supabase.easyui5.controller.EntityCreate", {
         
         /**
-         * EntityCreate.controller.js
-         * 
-         * Enhanced onInit method to ensure parent info is properly loaded
+         * Initialize the controller
          */
         onInit: function() {
             console.log("EntityCreate controller initializing");
@@ -42,16 +40,554 @@ sap.ui.define([
             
             this.setModel(oViewModel, "viewModel");
             
-            // Register for route matched event
-            this.getRouter().getRoute("entityCreate").attachPatternMatched(this._onRouteMatched, this);
+            // Debug view initialization
+            console.log("EntityCreate view:", this.getView());
+            console.log("EntityCreate view ID:", this.getView().getId());
+            
+            // Register for the correct routes
+            const oRouter = this.getRouter();
+            if (oRouter) {
+                // Attach to both routes since they both target the same view
+                const oEntityCreateRoute = oRouter.getRoute("entityCreate");
+                if (oEntityCreateRoute) {
+                    oEntityCreateRoute.attachPatternMatched(this._onRouteMatched, this);
+                }
+                
+                const oCreateRoute = oRouter.getRoute("create");
+                if (oCreateRoute) {
+                    oCreateRoute.attachPatternMatched(this._onRouteMatched, this);
+                }
+                
+                if (!oEntityCreateRoute && !oCreateRoute) {
+                    console.error("Could not find create/entityCreate route");
+                }
+            }
             
             // Load parent entity info immediately
             this._loadParentEntityInfo();
         },
+        
+        /**
+         * Called when the view is displayed
+         */
+        onBeforeShow: function() {
+            console.log("EntityCreate view onBeforeShow called");
+        },
+        
+        /**
+         * Called after the view is rendered
+         */
+        onAfterRendering: function() {
+            console.log("EntityCreate view onAfterRendering called");
+            const oPage = this.getView().byId("entityCreatePage");
+            if (oPage) {
+                console.log("EntityCreate page found, visible:", oPage.getVisible());
+            }
+        },
+
+        /**
+         * Route matched handler with proper cleanup and ID management
+         */
+        _onRouteMatched: function(oEvent) {
+            try {
+                const oArgs = oEvent.getParameter("arguments");
+                const sTableId = oArgs.table;
+                
+                console.log("EntityCreate._onRouteMatched called");
+                console.log("Route name:", oEvent.getParameter("name"));
+                console.log("Table ID:", sTableId);
+                
+                // Clean up existing controls to prevent duplicate IDs
+                this._cleanupFormControls();
+                
+                // CRITICAL: Store table name in controller property
+                this._sTableName = sTableId;
+                
+                // Store the table ID in the view model
+                const oViewModel = this.getModel("viewModel");
+                oViewModel.setProperty("/tableId", sTableId);
+                
+                // Set table name based on the ID (capitalize first letter)
+                const sTableName = sTableId.charAt(0).toUpperCase() + sTableId.slice(1).replace(/_/g, " ");
+                oViewModel.setProperty("/tableName", sTableName);
+                
+                // Set the page title and ensure visibility
+                const oPage = this.getView().byId("entityCreatePage");
+                if (oPage) {
+                    oPage.setTitle("Create New " + sTableName);
+                    // Ensure the page is visible
+                    oPage.setVisible(true);
+                    console.log("EntityCreate page title set and made visible");
+                } else {
+                    console.error("EntityCreate page not found!");
+                }
+                
+                // Reset entity data and validation errors
+                oViewModel.setProperty("/entity", {});
+                oViewModel.setProperty("/validationErrors", {});
+                
+                // Re-load parent info to ensure it's available
+                this._loadParentEntityInfo();
+                
+                // Load metadata for the table
+                this.getTableMetadata(sTableId).then((oMetadata) => {
+                    console.log("Table metadata loaded for", sTableId);
+                    console.log("Metadata columns:", oMetadata.columns.length);
+                    
+                    // Initialize entity data with default values
+                    this._initializeEntityData(oMetadata);
+                    
+                    // Configure form with unique IDs
+                    this._configureForm(oMetadata);
+                    
+                    // Force a page update
+                    const oPage = this.getView().byId("entityCreatePage");
+                    if (oPage) {
+                        oPage.rerender();
+                    }
+                }).catch(error => {
+                    console.error("Error loading metadata:", error);
+                    this.showErrorMessage("Error loading metadata: " + error.message);
+                });
+            } catch (routeError) {
+                console.error("Error in route matched handler:", routeError);
+                this.showErrorMessage("An unexpected error occurred: " + routeError.message);
+            }
+        },
+
+        /**
+         * Clean up existing form controls to prevent duplicate IDs
+         */
+        _cleanupFormControls: function() {
+            console.log("Cleaning up existing form controls");
+            
+            const oFormContainer = this.getView().byId("entityCreateContainer");
+            if (oFormContainer) {
+                // Get all form elements
+                const aFormElements = oFormContainer.getFormElements();
+                
+                // Destroy each form element and its controls
+                aFormElements.forEach(oElement => {
+                    // Destroy all fields in the form element
+                    const aFields = oElement.getFields();
+                    aFields.forEach(oField => {
+                        if (oField && oField.destroy) {
+                            console.log("Destroying control with ID:", oField.getId());
+                            oField.destroy();
+                        }
+                    });
+                    
+                    // Destroy the form element itself
+                    if (oElement && oElement.destroy) {
+                        oElement.destroy();
+                    }
+                });
+                
+                // Clear the container
+                oFormContainer.removeAllFormElements();
+            }
+        },
+
+        /**
+         * Configure form fields with unique ID generation
+         */
+        _configureForm: function(oMetadata) {
+            console.log("Configuring form with metadata");
+            
+            // First check if the view is ready
+            const oView = this.getView();
+            if (!oView) {
+                console.error("View not available!");
+                return;
+            }
+            
+            // Try to get the form container
+            const oFormContainer = oView.byId("entityCreateContainer");
+            if (!oFormContainer) {
+                console.error("Form container 'entityCreateContainer' not found!");
+                console.log("Available view controls:", Object.keys(oView.mAggregations || {}));
+                
+                // Try to find the form
+                const oForm = oView.byId("entityCreateForm");
+                if (oForm) {
+                    console.log("Form found, containers:", oForm.getFormContainers().length);
+                }
+                return;
+            }
+            
+            // Ensure container is clean
+            this._cleanupFormControls();
+            
+            const oViewModel = this.getModel("viewModel");
+            const oParentInfo = oViewModel.getProperty("/parentInfo");
+            
+            // Generate a unique timestamp for this form configuration
+            const sUniquePrefix = "createForm_" + Date.now() + "_";
+            console.log("Using unique prefix:", sUniquePrefix);
+            
+            // Process each field
+            oMetadata.columns.forEach((oColumnMetadata, index) => {
+                // Skip non-editable fields and keys
+                if (oColumnMetadata.editable === false || 
+                    oColumnMetadata.name === oMetadata.primaryKey ||
+                    oColumnMetadata.name === 'created_at' ||
+                    oColumnMetadata.name === 'updated_at') {
+                    return;
+                }
+                
+                console.log(`Processing column: ${oColumnMetadata.name}`);
+                
+                // Create form element
+                const bIsRequired = oColumnMetadata.required === true;
+                const oFormElement = new sap.ui.layout.form.FormElement({
+                    label: new sap.m.Label({
+                        text: oColumnMetadata.label || oColumnMetadata.name,
+                        required: bIsRequired
+                    })
+                });
+                
+                // Determine the control based on column type
+                const sPath = "viewModel>/entity/" + oColumnMetadata.name;
+                
+                // Generate a truly unique ID
+                const sUniqueId = sUniquePrefix + oColumnMetadata.name + "_" + index;
+                console.log(`Creating control with ID: ${sUniqueId}`);
+                
+                // Check if this is a parent foreign key
+                const bIsParentForeignKey = oParentInfo && 
+                    oColumnMetadata.name === oParentInfo.foreignKey;
+                
+                // Create appropriate input control
+                const oControl = this._createInputField(
+                    oColumnMetadata, 
+                    sPath, 
+                    bIsRequired, 
+                    sUniqueId, 
+                    bIsParentForeignKey
+                );
+                
+                if (oControl) {
+                    oFormElement.addField(oControl);
+                    oFormContainer.addFormElement(oFormElement);
+                    console.log(`Added form element for field: ${oColumnMetadata.name}`);
+                }
+            });
+            
+            // Log summary
+            const nElements = oFormContainer.getFormElements().length;
+            console.log(`Form configuration complete. Total form elements: ${nElements}`);
+            
+            // Force update
+            oFormContainer.invalidate();
+        },
+
+        /**
+         * Create an input field with unique ID
+         */
+        _createInputField: function(oColumnMetadata, sPath, bIsRequired, sUniqueId, bIsParentForeignKey) {
+            let oControl;
+            
+            // Generate a unique ID for the control
+            const sControlId = this.getView().createId(sUniqueId);
+            console.log(`Creating control type '${oColumnMetadata.type}' with ID: ${sControlId}`);
+            
+            switch (oColumnMetadata.type) {
+                case "relation":
+                    if (bIsParentForeignKey) {
+                        oControl = new sap.m.Text({
+                            id: sControlId,
+                            text: `Connected to parent ${this.getModel("viewModel").getProperty("/parentInfo/parentTable")} (ID: ${this.getModel("viewModel").getProperty("/parentInfo/parentId")})`
+                        });
+                    } else {
+                        oControl = new sap.m.ComboBox({
+                            id: sControlId,
+                            selectedKey: { path: sPath },
+                            width: "100%",
+                            required: bIsRequired,
+                            valueState: "{= ${viewModel>/validationErrors/" + oColumnMetadata.name + "} ? 'Error' : 'None' }",
+                            valueStateText: "{viewModel>/validationErrors/" + oColumnMetadata.name + "}"
+                        });
+                        
+                        this._loadRelationOptions(
+                            oControl, 
+                            oColumnMetadata.relation, 
+                            oColumnMetadata.name
+                        );
+                    }
+                    break;
+                
+                case "boolean":
+                    oControl = new sap.m.CheckBox({
+                        id: sControlId,
+                        selected: { path: sPath },
+                        width: "100%"
+                    });
+                    break;
+                
+                case "date":
+                    oControl = new sap.m.DatePicker({
+                        id: sControlId,
+                        value: {
+                            path: sPath,
+                            type: new sap.ui.model.type.Date({
+                                pattern: "yyyy-MM-dd"
+                            })
+                        },
+                        valueFormat: "yyyy-MM-dd",
+                        displayFormat: "medium",
+                        width: "100%",
+                        required: bIsRequired,
+                        valueState: "{= ${viewModel>/validationErrors/" + oColumnMetadata.name + "} ? 'Error' : 'None' }",
+                        valueStateText: "{viewModel>/validationErrors/" + oColumnMetadata.name + "}"
+                    });
+                    break;
+                
+                case "number":
+                    oControl = new sap.m.Input({
+                        id: sControlId,
+                        value: { path: sPath },
+                        type: "Number",
+                        width: "100%",
+                        required: bIsRequired,
+                        valueState: "{= ${viewModel>/validationErrors/" + oColumnMetadata.name + "} ? 'Error' : 'None' }",
+                        valueStateText: "{viewModel>/validationErrors/" + oColumnMetadata.name + "}"
+                    });
+                    break;
+                
+                case "email":
+                    oControl = new sap.m.Input({
+                        id: sControlId,
+                        value: { path: sPath },
+                        type: "Email",
+                        width: "100%",
+                        required: bIsRequired,
+                        valueState: "{= ${viewModel>/validationErrors/" + oColumnMetadata.name + "} ? 'Error' : 'None' }",
+                        valueStateText: "{viewModel>/validationErrors/" + oColumnMetadata.name + "}"
+                    });
+                    break;
+                    
+                case "text":
+                    oControl = new sap.m.TextArea({
+                        id: sControlId,
+                        value: { path: sPath },
+                        rows: 3,
+                        width: "100%",
+                        required: bIsRequired,
+                        valueState: "{= ${viewModel>/validationErrors/" + oColumnMetadata.name + "} ? 'Error' : 'None' }",
+                        valueStateText: "{viewModel>/validationErrors/" + oColumnMetadata.name + "}"
+                    });
+                    break;
+                
+                default:
+                    oControl = new sap.m.Input({
+                        id: sControlId,
+                        value: { path: sPath },
+                        width: "100%",
+                        required: bIsRequired,
+                        valueState: "{= ${viewModel>/validationErrors/" + oColumnMetadata.name + "} ? 'Error' : 'None' }",
+                        valueStateText: "{viewModel>/validationErrors/" + oColumnMetadata.name + "}"
+                    });
+                    break;
+            }
+            
+            // Store column name for later reference using custom data
+            if (oControl) {
+                oControl.data("columnName", oColumnMetadata.name);
+            }
+            
+            return oControl;
+        },
+
+        /**
+         * Fixed onSavePress with proper entity type and field validation
+         */
+        onSavePress: async function() {
+            try {
+                // Use the global supabase client directly
+                const supabase = window.supabaseClient;
+                
+                if (!supabase) {
+                    throw new Error("Supabase client not initialized");
+                }
+                
+                // Ensure table name is set
+                if (!this._sTableName) {
+                    throw new Error("Table name is not set. Please navigate back and try again.");
+                }
+                
+                console.log("Creating entity for table:", this._sTableName);
+                
+                // Show busy indicator
+                const oViewModel = this.getModel("viewModel");
+                oViewModel.setProperty("/busy", true);
+                
+                // 1. Collect form data from the view model
+                const oEntityData = oViewModel.getProperty("/entity");
+                const oMetadata = await this.getTableMetadata(this._sTableName);
+                
+                // Create clean form data
+                const oFormData = {};
+                
+                // Validate and collect form data
+                let hasValidationError = false;
+                const oValidationErrors = {};
+                
+                // Process each field from the entity data
+                for (const sFieldName in oEntityData) {
+                    // Skip auto-generated fields
+                    if (sFieldName === 'created_at' || sFieldName === 'updated_at') {
+                        continue;
+                    }
+                    
+                    // Find the column metadata
+                    const oColumn = oMetadata.columns.find(col => col.name === sFieldName);
+                    
+                    // Skip non-editable fields
+                    if (oColumn && oColumn.editable === false && sFieldName !== oMetadata.primaryKey) {
+                        continue;
+                    }
+                    
+                    // Skip the primary key for create operations
+                    if (sFieldName === oMetadata.primaryKey) {
+                        continue;
+                    }
+                    
+                    // Get the field value
+                    const value = oEntityData[sFieldName];
+                    
+                    // Validate required fields
+                    if (oColumn && oColumn.required === true) {
+                        if (value === undefined || value === null || value === "") {
+                            oValidationErrors[sFieldName] = `${oColumn.label || sFieldName} is required`;
+                            hasValidationError = true;
+                        }
+                    }
+                    
+                    // Add the field value
+                    if (value !== undefined && value !== null && value !== "") {
+                        oFormData[sFieldName] = value;
+                    } else if (oColumn && oColumn.required === true) {
+                        // For required fields, we need to include them even if empty to trigger DB validation
+                        oFormData[sFieldName] = null;
+                    }
+                }
+                
+                // If validation errors, show them and stop
+                if (hasValidationError) {
+                    oViewModel.setProperty("/validationErrors", oValidationErrors);
+                    oViewModel.setProperty("/busy", false);
+                    sap.m.MessageToast.show("Please fill in all required fields");
+                    return;
+                }
+                
+                console.log("Form data collected:", oFormData);
+                
+                // 2. Get parent info
+                const oParentInfo = oViewModel.getProperty("/parentInfo");
+                
+                // If we have parent info, set the foreign key
+                if (oParentInfo && oParentInfo.foreignKey && oParentInfo.parentId) {
+                    console.log(`Setting foreign key ${oParentInfo.foreignKey} = ${oParentInfo.parentId}`);
+                    oFormData[oParentInfo.foreignKey] = oParentInfo.parentId;
+                }
+                
+                // 3. Check if this table needs an entity record
+                const aTablesWithEntities = ['customers', 'products', 'lead', 'campaigns', 'contacts', 'activities'];
+                let aTableResult;
+                
+                if (aTablesWithEntities.includes(this._sTableName)) {
+                    // Create entity record first
+                    let entityType = this._sTableName;
+                    // Remove trailing 's' for entity type (e.g., "customers" -> "customer")
+                    if (entityType.endsWith('s')) {
+                        entityType = entityType.substring(0, entityType.length - 1);
+                    }
+                    
+                    const oEntityData = {
+                        entity_type: entityType,
+                        name: oFormData.name || oFormData.company_name || oFormData.product_name || oFormData.subject || "New " + entityType,
+                        description: oFormData.description || ""
+                    };
+                    
+                    console.log("Creating entity with data:", oEntityData);
+                    
+                    const { data: aEntityResult, error: oEntityError } = await supabase
+                        .from("entities")
+                        .insert(oEntityData)
+                        .select()
+                        .single();
+                        
+                    if (oEntityError) {
+                        throw oEntityError;
+                    }
+                    
+                    console.log("Entity created:", aEntityResult);
+                    
+                    // Add entity_id to form data
+                    oFormData.entity_id = aEntityResult.entity_id;
+                }
+                
+                // 4. Insert into the specific table
+                console.log("Inserting into " + this._sTableName + " table:", oFormData);
+                
+                const { data: insertResult, error: oTableError } = await supabase
+                    .from(this._sTableName)
+                    .insert(oFormData)
+                    .select()
+                    .single();
+                    
+                if (oTableError) {
+                    console.error("Error inserting into " + this._sTableName + ":", oTableError);
+                    
+                    // Clean up the entity record if it was created
+                    if (oFormData.entity_id) {
+                        await supabase
+                            .from("entities")
+                            .delete()
+                            .eq("entity_id", oFormData.entity_id);
+                    }
+                        
+                    throw oTableError;
+                }
+                
+                aTableResult = insertResult;
+                
+                console.log("Table record created:", aTableResult);
+                
+                // Hide busy indicator
+                oViewModel.setProperty("/busy", false);
+                
+                // 5. Navigate based on parent info or to detail view
+                this._navigateAfterSave(oParentInfo, aTableResult, oMetadata);
+                
+                // 6. Show success message
+                const sTableName = this._sTableName.charAt(0).toUpperCase() + this._sTableName.slice(1).replace(/_/g, " ");
+                sap.m.MessageToast.show("Successfully created " + sTableName);
+                
+            } catch (error) {
+                console.error("Error creating entity:", error);
+                
+                // Hide busy indicator
+                const oViewModel = this.getModel("viewModel");
+                oViewModel.setProperty("/busy", false);
+                
+                // Show specific error messages
+                let errorMessage = "Error creating record: ";
+                
+                if (error.code === 'PGRST204') {
+                    errorMessage += "Column not found in database schema";
+                } else if (error.code === '23502') {
+                    errorMessage += "Required field missing";
+                } else {
+                    errorMessage += (error.message || "Unknown error");
+                }
+                
+                sap.m.MessageToast.show(errorMessage);
+            }
+        },
 
         /**
          * Load parent entity info from session storage
-         * This is a dedicated method to ensure parent info is loaded properly
          */
         _loadParentEntityInfo: function() {
             try {
@@ -84,63 +620,15 @@ sap.ui.define([
             }
         },
 
-
         /**
-         * Route matched handler with enhanced parent info handling
-         */
-        _onRouteMatched: function(oEvent) {
-            try {
-                const sTableId = oEvent.getParameter("arguments").table;
-                console.log("EntityCreate route matched with table:", sTableId);
-                
-                // Store the table ID in the view model
-                const oViewModel = this.getModel("viewModel");
-                oViewModel.setProperty("/tableId", sTableId);
-                
-                // Set table name based on the ID (capitalize first letter)
-                const sTableName = sTableId.charAt(0).toUpperCase() + sTableId.slice(1).replace(/_/g, " ");
-                oViewModel.setProperty("/tableName", sTableName);
-                
-                // Set the page title
-                this.getView().byId("entityCreatePage").setTitle("Create New " + sTableName);
-                
-                // Reset entity data and validation errors
-                oViewModel.setProperty("/entity", {});
-                oViewModel.setProperty("/validationErrors", {});
-                
-                // Re-load parent info to ensure it's available
-                this._loadParentEntityInfo();
-                
-                // Load metadata for the table
-                this.getTableMetadata(sTableId).then((oMetadata) => {
-                    console.log("Table metadata loaded:", JSON.stringify(oMetadata, null, 2));
-                    
-                    // Initialize entity data with default values
-                    this._initializeEntityData(oMetadata);
-                    
-                    // Configure form
-                    this._configureForm(oMetadata);
-                }).catch(error => {
-                    console.error("Error loading metadata:", error);
-                    this.showErrorMessage("Error loading metadata: " + error.message);
-                });
-            } catch (routeError) {
-                console.error("Error in route matched handler:", routeError);
-                this.showErrorMessage("An unexpected error occurred: " + routeError.message);
-            }
-        },
-            
-        /**
-         * Enhanced _initializeEntityData method for EntityCreate.controller.js
-         * Replace the existing method with this implementation
+         * Initialize entity data with default values
          */
         _initializeEntityData: function(oMetadata) {
             const oEntityData = {};
             const oViewModel = this.getModel("viewModel");
             const oParentInfo = oViewModel.getProperty("/parentInfo");
             
-            console.log("Initializing entity data with metadata:", JSON.stringify(oMetadata.columns.map(c => c.name), null, 2));
-            console.log("Parent info:", oParentInfo ? JSON.stringify(oParentInfo) : "none");
+            console.log("Initializing entity data for table:", this._sTableName);
             
             // Set default values for all fields
             oMetadata.columns.forEach((oColumnMetadata) => {
@@ -151,9 +639,9 @@ sap.ui.define([
                 } else if (oColumnMetadata.type === "boolean") {
                     oEntityData[oColumnMetadata.name] = false;
                 } else if (oColumnMetadata.type === "number") {
-                    oEntityData[oColumnMetadata.name] = 0;
+                    oEntityData[oColumnMetadata.name] = null;
                 } else if (oColumnMetadata.type === "date") {
-                    oEntityData[oColumnMetadata.name] = new Date().toISOString().split('T')[0];
+                    oEntityData[oColumnMetadata.name] = null;
                 } else {
                     oEntityData[oColumnMetadata.name] = "";
                 }
@@ -166,118 +654,14 @@ sap.ui.define([
         },
 
         /**
-         * Configure form fields dynamically
-         * @param {Object} oMetadata Table metadata
-         * @private
-         */
-        _configureForm: function(oMetadata) {
-            console.log("Detailed Metadata:", JSON.stringify(oMetadata, null, 2));
-            
-            const oFormContainer = this.getView().byId("entityCreateContainer");
-            if (!oFormContainer) {
-                console.error("CRITICAL: Form container not found!");
-                return;
-            }
-            
-            // Clear existing form elements
-            oFormContainer.removeAllFormElements();
-            
-            const oViewModel = this.getModel("viewModel");
-            const oEntityData = oViewModel.getProperty("/entity");
-            const oParentInfo = oViewModel.getProperty("/parentInfo");
-            
-            console.log("Current Entity Data:", JSON.stringify(oEntityData, null, 2));
-            console.log("Parent Info:", JSON.stringify(oParentInfo, null, 2));
-            
-            // Generate a unique identifier
-            const sUniqueFormId = "createForm_" + Date.now() + "_";
-            
-            // Collect field configurations
-            const aFieldConfigurations = oMetadata.columns.filter(oColumnMetadata => 
-                !(oColumnMetadata.editable === false || 
-                oColumnMetadata.name === oMetadata.primaryKey ||
-                oColumnMetadata.name === 'created_at' ||
-                oColumnMetadata.name === 'updated_at')
-            );
-            
-            // Process each field configuration
-            aFieldConfigurations.forEach((oColumnMetadata, index) => {
-                console.log(`Processing column: ${oColumnMetadata.name}`);
-                
-                // Create form element
-                const bIsRequired = oColumnMetadata.required === true;
-                const oFormElement = new sap.ui.layout.form.FormElement({
-                    label: new sap.m.Label({
-                        text: oColumnMetadata.label || oColumnMetadata.name,
-                        required: bIsRequired
-                    })
-                });
-                
-                // Determine the control based on column type
-                const sPath = "viewModel>/entity/" + oColumnMetadata.name;
-                
-                // Generate a truly unique ID
-                const sUniqueId = sUniqueFormId + oColumnMetadata.name + "_" + index;
-                
-                // Check if this is a parent foreign key
-                const bIsParentForeignKey = oParentInfo && 
-                    oColumnMetadata.name === oParentInfo.foreignKey;
-                
-                console.log(`Column ${oColumnMetadata.name} - Type: ${oColumnMetadata.type}`);
-                
-                // Create appropriate input control using the new method
-                try {
-                    const oControl = this._createInputField(
-                        oColumnMetadata, 
-                        sPath, 
-                        bIsRequired, 
-                        sUniqueId, 
-                        bIsParentForeignKey
-                    );
-                    
-                    // Ensure control is created
-                    if (oControl) {
-                        // Add field to form element
-                        oFormElement.addField(oControl);
-                        // Add form element to container
-                        oFormContainer.addFormElement(oFormElement);
-                        
-                        console.log(`Added form element for ${oColumnMetadata.name}`);
-                    } else {
-                        console.error(`Failed to create control for ${oColumnMetadata.name}`);
-                    }
-                } catch (controlError) {
-                    console.error(`Error creating control for ${oColumnMetadata.name}:`, controlError);
-                }
-            });
-            
-            console.log(`Form configuration complete.`);
-            
-            // Force layout update
-            const oForm = this.getView().byId("entityCreateForm");
-            if (oForm) {
-                oForm.invalidate();
-            }
-        },
-                
-        /**
-         * Load options for relation fields with improved field detection
-         * @param {sap.m.ComboBox} oComboBox The ComboBox control
-         * @param {string} sRelatedTable The related table
-         * @param {string} sFieldName The field name
-         * @private
+         * Load options for relation fields
          */
         _loadRelationOptions: function(oComboBox, sRelatedTable, sFieldName) {
             console.log(`Loading relation options for ${sFieldName} from table ${sRelatedTable}`);
             
-            // Get metadata for related table
             this.getTableMetadata(sRelatedTable).then(function(oMetadata) {
-                console.log(`Metadata for related table ${sRelatedTable}:`, JSON.stringify(oMetadata, null, 2));
-                
                 const sPrimaryKey = oMetadata.primaryKey;
                 const sTitleField = oMetadata.titleField || sPrimaryKey;
-                
-                console.log(`Primary Key: ${sPrimaryKey}, Title Field: ${sTitleField}`);
                 
                 // Load related entities
                 this.getSupabaseClient()
@@ -289,788 +673,116 @@ sap.ui.define([
                             return;
                         }
                         
-                        console.log(`Loaded ${data ? data.length : 0} relation options`);
-                        
-                        // Inspect first record to understand available fields
-                        if (data && data.length > 0) {
-                            console.log(`Sample record fields: ${Object.keys(data[0]).join(', ')}`);
-                        }
-                        
                         // Clear existing items
                         oComboBox.removeAllItems();
                         
                         // Add items to ComboBox
                         if (data) {
                             data.forEach(item => {
-                                // Try multiple common name fields if the title field is undefined
-                                let displayText = item[sTitleField];
-                                
-                                if (!displayText) {
-                                    // Try common alternative field names for name/title
-                                    const alternatives = ['name', 'customer_name', 'company_name', 'title', 
-                                                        'display_name', 'full_name', 'label'];
-                                    
-                                    for (const alt of alternatives) {
-                                        if (item[alt]) {
-                                            displayText = item[alt];
-                                            console.log(`Using alternative field '${alt}' for display text`);
-                                            break;
-                                        }
-                                    }
-                                    
-                                    // If still no display text, use the first non-ID field as fallback
-                                    if (!displayText) {
-                                        const nonIdFields = Object.keys(item).filter(key => 
-                                            key !== sPrimaryKey && 
-                                            !key.endsWith('_id') && 
-                                            !key.includes('created_at') && 
-                                            !key.includes('updated_at'));
-                                        
-                                        if (nonIdFields.length > 0) {
-                                            displayText = item[nonIdFields[0]];
-                                            console.log(`Using fallback field '${nonIdFields[0]}' for display text`);
-                                        }
-                                    }
-                                    
-                                    // Last resort, use the ID
-                                    if (!displayText) {
-                                        displayText = `ID: ${item[sPrimaryKey]}`;
-                                    }
-                                }
-                                
-                                // Create the item with the determined display text
-                                const oItem = new sap.ui.core.Item({
+                                const displayText = item[sTitleField] || item.name || `ID: ${item[sPrimaryKey]}`;
+                                oComboBox.addItem(new sap.ui.core.Item({
                                     key: item[sPrimaryKey],
                                     text: displayText
-                                });
-                                oComboBox.addItem(oItem);
-                                
-                                console.log(`Added item: Key=${item[sPrimaryKey]}, Text=${displayText}`);
+                                }));
                             });
                         }
                     });
             }.bind(this));
         },
-        /**
-         * Create an input field based on column metadata with enhanced validation
-         * @param {Object} oColumnMetadata The column metadata
-         * @param {string} sPath The binding path
-         * @param {boolean} bIsRequired Whether the field is required
-         * @param {string} sUniqueId A unique ID for the field
-         * @param {boolean} bIsParentForeignKey Whether this is a parent foreign key
-         * @returns {sap.ui.core.Control} The created control
-         * @private
-         */
-        _createInputField: function(oColumnMetadata, sPath, bIsRequired, sUniqueId, bIsParentForeignKey) {
-            let oControl;
-            
-            switch (oColumnMetadata.type) {
-                case "relation":
-                    if (bIsParentForeignKey) {
-                        oControl = new sap.m.Text({
-                            id: sUniqueId,
-                            text: `Connected to parent ${this.getModel("viewModel").getProperty("/parentInfo/parentTable")} (ID: ${this.getModel("viewModel").getProperty("/parentInfo/parentId")})`
-                        });
-                    } else {
-                        oControl = new sap.m.ComboBox({
-                            id: sUniqueId,
-                            selectedKey: {
-                                path: sPath
-                            },
-                            width: "100%",
-                            required: bIsRequired,
-                            showSecondaryValues: true,
-                            valueState: "{= ${viewModel>/validationErrors/" + oColumnMetadata.name + "} ? 'Error' : 'None' }",
-                            valueStateText: "{viewModel>/validationErrors/" + oColumnMetadata.name + "}",
-                            selectionChange: function(oEvent) {
-                                // Clear error state on selection
-                                oEvent.getSource().setValueState("None");
-                                
-                                // Get view model to clear validation errors
-                                const oViewModel = this.getModel("viewModel");
-                                const oErrors = oViewModel.getProperty("/validationErrors") || {};
-                                if (oErrors[oColumnMetadata.name]) {
-                                    delete oErrors[oColumnMetadata.name];
-                                    oViewModel.setProperty("/validationErrors", oErrors);
-                                }
-                            }.bind(this)
-                        });
-                        
-                        this._loadRelationOptions(
-                            oControl, 
-                            oColumnMetadata.relation, 
-                            oColumnMetadata.name
-                        );
-                    }
-                    break;
-                
-                case "boolean":
-                    oControl = new sap.m.CheckBox({
-                        id: sUniqueId,
-                        selected: {
-                            path: sPath
-                        },
-                        width: "100%",
-                        select: function(oEvent) {
-                            // Get the view model to access validation errors
-                            const oViewModel = this.getModel("viewModel");
-                            const oErrors = oViewModel.getProperty("/validationErrors");
-                            
-                            // Clear any errors for this field
-                            if (oErrors && oErrors[oColumnMetadata.name]) {
-                                delete oErrors[oColumnMetadata.name];
-                                oViewModel.setProperty("/validationErrors", oErrors);
-                            }
-                        }.bind(this)
-                    });
-                    break;
-                
-                case "date":
-                    oControl = new sap.m.DatePicker({
-                        id: sUniqueId,
-                        value: {
-                            path: sPath,
-                            type: new sap.ui.model.type.Date({
-                                pattern: "yyyy-MM-dd"
-                            })
-                        },
-                        valueFormat: "yyyy-MM-dd",
-                        displayFormat: "medium",
-                        width: "100%",
-                        required: bIsRequired,
-                        valueState: "{= ${viewModel>/validationErrors/" + oColumnMetadata.name + "} ? 'Error' : 'None' }",
-                        valueStateText: "{viewModel>/validationErrors/" + oColumnMetadata.name + "}",
-                        change: function(oEvent) {
-                            // Clear error state on successful change
-                            if (oEvent.getParameter("valid")) {
-                                oEvent.getSource().setValueState("None");
-                                
-                                // Get the view model to access validation errors
-                                const oViewModel = this.getModel("viewModel");
-                                const oErrors = oViewModel.getProperty("/validationErrors");
-                                
-                                // Clear any errors for this field
-                                if (oErrors && oErrors[oColumnMetadata.name]) {
-                                    delete oErrors[oColumnMetadata.name];
-                                    oViewModel.setProperty("/validationErrors", oErrors);
-                                }
-                            } else {
-                                oEvent.getSource().setValueState("Error");
-                                oEvent.getSource().setValueStateText("Please enter a valid date");
-                                
-                                // Get the view model to update validation errors
-                                const oViewModel = this.getModel("viewModel");
-                                const oErrors = oViewModel.getProperty("/validationErrors") || {};
-                                
-                                // Set error for this field
-                                oErrors[oColumnMetadata.name] = "Please enter a valid date";
-                                oViewModel.setProperty("/validationErrors", oErrors);
-                            }
-                        }.bind(this)
-                    });
-                    break;
-                
-                case "number":
-                    oControl = new sap.m.Input({
-                        id: sUniqueId,
-                        value: {
-                            path: sPath,
-                            type: new sap.ui.model.type.Float({
-                                minFractionDigits: 0,
-                                maxFractionDigits: 2
-                            })
-                        },
-                        type: "Number",
-                        width: "100%",
-                        required: bIsRequired,
-                        valueState: "{= ${viewModel>/validationErrors/" + oColumnMetadata.name + "} ? 'Error' : 'None' }",
-                        valueStateText: "{viewModel>/validationErrors/" + oColumnMetadata.name + "}",
-                        liveChange: function(oEvent) {
-                            const value = oEvent.getParameter("value");
-                            
-                            // Get the view model to access/update validation errors
-                            const oViewModel = this.getModel("viewModel");
-                            const oErrors = oViewModel.getProperty("/validationErrors") || {};
-                            
-                            if (value && isNaN(parseFloat(value))) {
-                                oEvent.getSource().setValueState("Error");
-                                oEvent.getSource().setValueStateText("Please enter a valid number");
-                                
-                                // Set error for this field
-                                oErrors[oColumnMetadata.name] = "Please enter a valid number";
-                                oViewModel.setProperty("/validationErrors", oErrors);
-                            } else {
-                                oEvent.getSource().setValueState("None");
-                                
-                                // Clear any errors for this field
-                                if (oErrors[oColumnMetadata.name]) {
-                                    delete oErrors[oColumnMetadata.name];
-                                    oViewModel.setProperty("/validationErrors", oErrors);
-                                }
-                            }
-                        }.bind(this)
-                    });
-                    break;
-                
-                case "email":
-                    oControl = new sap.m.Input({
-                        id: sUniqueId,
-                        value: {
-                            path: sPath
-                        },
-                        type: "Email",
-                        width: "100%",
-                        required: bIsRequired,
-                        valueState: "{= ${viewModel>/validationErrors/" + oColumnMetadata.name + "} ? 'Error' : 'None' }",
-                        valueStateText: "{viewModel>/validationErrors/" + oColumnMetadata.name + "}",
-                        liveChange: function(oEvent) {
-                            const value = oEvent.getParameter("value");
-                            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-                            
-                            // Get the view model to access/update validation errors
-                            const oViewModel = this.getModel("viewModel");
-                            const oErrors = oViewModel.getProperty("/validationErrors") || {};
-                            
-                            if (value && !emailRegex.test(value)) {
-                                oEvent.getSource().setValueState("Error");
-                                oEvent.getSource().setValueStateText("Please enter a valid email address");
-                                
-                                // Set error for this field
-                                oErrors[oColumnMetadata.name] = "Please enter a valid email address";
-                                oViewModel.setProperty("/validationErrors", oErrors);
-                            } else {
-                                oEvent.getSource().setValueState("None");
-                                
-                                // Clear any errors for this field
-                                if (oErrors[oColumnMetadata.name]) {
-                                    delete oErrors[oColumnMetadata.name];
-                                    oViewModel.setProperty("/validationErrors", oErrors);
-                                }
-                            }
-                        }.bind(this)
-                    });
-                    break;
-                    
-                case "url":
-                    oControl = new sap.m.Input({
-                        id: sUniqueId,
-                        value: {
-                            path: sPath
-                        },
-                        type: "Url",
-                        width: "100%",
-                        required: bIsRequired,
-                        valueState: "{= ${viewModel>/validationErrors/" + oColumnMetadata.name + "} ? 'Error' : 'None' }",
-                        valueStateText: "{viewModel>/validationErrors/" + oColumnMetadata.name + "}",
-                        liveChange: function(oEvent) {
-                            const value = oEvent.getParameter("value");
-                            const urlRegex = /^(http|https):\/\/[^ "]+$/;
-                            
-                            // Get the view model to access/update validation errors
-                            const oViewModel = this.getModel("viewModel");
-                            const oErrors = oViewModel.getProperty("/validationErrors") || {};
-                            
-                            if (value && !urlRegex.test(value)) {
-                                oEvent.getSource().setValueState("Error");
-                                oEvent.getSource().setValueStateText("Please enter a valid URL (starting with http:// or https://)");
-                                
-                                // Set error for this field
-                                oErrors[oColumnMetadata.name] = "Please enter a valid URL (starting with http:// or https://)";
-                                oViewModel.setProperty("/validationErrors", oErrors);
-                            } else {
-                                oEvent.getSource().setValueState("None");
-                                
-                                // Clear any errors for this field
-                                if (oErrors[oColumnMetadata.name]) {
-                                    delete oErrors[oColumnMetadata.name];
-                                    oViewModel.setProperty("/validationErrors", oErrors);
-                                }
-                            }
-                        }.bind(this)
-                    });
-                    break;
-                    
-                case "text":
-                    oControl = new sap.m.TextArea({
-                        id: sUniqueId,
-                        value: {
-                            path: sPath
-                        },
-                        rows: 3,
-                        width: "100%",
-                        required: bIsRequired,
-                        valueState: "{= ${viewModel>/validationErrors/" + oColumnMetadata.name + "} ? 'Error' : 'None' }",
-                        valueStateText: "{viewModel>/validationErrors/" + oColumnMetadata.name + "}"
-                    });
-                    break;
-                
-                default:
-                    oControl = new sap.m.Input({
-                        id: sUniqueId,
-                        value: {
-                            path: sPath
-                        },
-                        width: "100%",
-                        required: bIsRequired,
-                        valueState: "{= ${viewModel>/validationErrors/" + oColumnMetadata.name + "} ? 'Error' : 'None' }",
-                        valueStateText: "{viewModel>/validationErrors/" + oColumnMetadata.name + "}"
-                    });
-            }
-            
-            // Set control ID with consistent naming for easier access
-            if (oControl.setId) {
-                oControl.setId(this.getView().createId(oColumnMetadata.name + "Input"));
-            }
-            
-            return oControl;
-        },
-        
-        /**
-         * Reset error states on all form fields
-         * @private
-         */
-        _resetFormErrorStates: function() {
-            console.log("Resetting error states on all form fields");
-            
-            // Find all input fields in the view and reset errors
-            const aInputControls = [];
-            
-            // Look for standard input controls
-            this.getView().$().find(".sapMInputBase").each(function() {
-                const sId = this.id;
-                const oControl = sap.ui.getCore().byId(sId);
-                if (oControl) {
-                    aInputControls.push(oControl);
-                }
-            });
-            
-            // Look for checkbox controls separately
-            this.getView().$().find(".sapMCb").each(function() {
-                const sId = this.id;
-                const oControl = sap.ui.getCore().byId(sId);
-                if (oControl) {
-                    aInputControls.push(oControl);
-                }
-            });
-            
-            // Look for ComboBox controls separately
-            this.getView().$().find(".sapMComboBox").each(function() {
-                const sId = this.id;
-                const oControl = sap.ui.getCore().byId(sId);
-                if (oControl) {
-                    aInputControls.push(oControl);
-                }
-            });
-            
-            console.log("Found", aInputControls.length, "controls to reset");
-            
-            // Reset all fields to non-error state
-            aInputControls.forEach(oControl => {
-                if (oControl.setValueState) {
-                    console.log("Resetting value state for", oControl.getId());
-                    oControl.setValueState("None");
-                    if (oControl.setValueStateText) {
-                        oControl.setValueStateText("");
-                    }
-                }
-            });
-            
-            // Clear validation errors in the model
-            const oViewModel = this.getModel("viewModel");
-            if (oViewModel) {
-                oViewModel.setProperty("/validationErrors", {});
-            }
-            
-            console.log("Form error states reset complete");
-        },
-        
-        /**
-         * Validate form data
-         * @param {Object} oMetadata The table metadata
-         * @param {Object} oEntityData The entity data
-         * @returns {boolean} True if validation passes, false otherwise
-         * @private
-         */
-        _validateForm: function(oMetadata, oEntityData) {
-            const oValidationErrors = {};
-            let bValid = true;
-            
-            // Find all input fields in the current view for validation
-            const aInputControls = [];
-            this.getView().$().find(".sapMInputBase, .sapMCheckBox").each(function() {
-                const sId = this.id;
-                const oControl = sap.ui.getCore().byId(sId);
-                if (oControl) {
-                    aInputControls.push(oControl);
-                }
-            });
-            
-            console.log("Found input controls:", aInputControls.length);
-            
-            // Reset all fields to non-error state
-            aInputControls.forEach(oControl => {
-                if (oControl.setValueState) {
-                    oControl.setValueState("None");
-                    if (oControl.setValueStateText) {
-                        oControl.setValueStateText("");
-                    }
-                }
-            });
-            
-            // Check required fields and validate types
-            oMetadata.columns.forEach((oColumnMetadata) => {
-                // Skip fields that are not editable or primary key
-                if (oColumnMetadata.editable === false || 
-                    oColumnMetadata.name === oMetadata.primaryKey ||
-                    oColumnMetadata.name === 'created_at' ||
-                    oColumnMetadata.name === 'updated_at') {
-                    return;
-                }
-                
-                const sFieldName = oColumnMetadata.name;
-                const vFieldValue = oEntityData[sFieldName];
-                let oControl = null;
-                
-                // Find the input control for this field
-                for (let i = 0; i < aInputControls.length; i++) {
-                    const sControlId = aInputControls[i].getId();
-                    if (sControlId.endsWith(sFieldName + "Input") || 
-                        sControlId.indexOf(sFieldName + "Input") !== -1) {
-                        oControl = aInputControls[i];
-                        break;
-                    }
-                }
-                
-                if (!oControl) {
-                    console.log("Control not found for field:", sFieldName);
-                } else {
-                    console.log("Found control for field:", sFieldName, oControl.getId());
-                }
-                
-                // Check required fields
-                if (oColumnMetadata.required && 
-                    (vFieldValue === undefined || vFieldValue === null || vFieldValue === "")) {
-                    bValid = false;
-                    oValidationErrors[sFieldName] = "This field is required";
-                    
-                    // Set error state on the input control
-                    if (oControl && oControl.setValueState) {
-                        oControl.setValueState("Error");
-                        if (oControl.setValueStateText) {
-                            oControl.setValueStateText("This field is required");
-                        }
-                    }
-                    
-                    console.log("Required field validation failed:", sFieldName);
-                } 
-                // Validate field type
-                else if (vFieldValue !== undefined && vFieldValue !== null && vFieldValue !== "") {
-                    let bTypeValid = true;
-                    let sErrorMessage = "";
-                    
-                    switch (oColumnMetadata.type) {
-                        case "number":
-                            // Check if value is a valid number
-                            if (isNaN(parseFloat(vFieldValue)) || !isFinite(vFieldValue)) {
-                                bTypeValid = false;
-                                sErrorMessage = "Please enter a valid number";
-                            }
-                            break;
-                            
-                        case "date":
-                            // Check if value is a valid date
-                            const oDate = new Date(vFieldValue);
-                            if (isNaN(oDate.getTime())) {
-                                bTypeValid = false;
-                                sErrorMessage = "Please enter a valid date";
-                            }
-                            break;
-                            
-                        case "email":
-                            // Basic email validation regex
-                            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-                            if (!emailRegex.test(vFieldValue)) {
-                                bTypeValid = false;
-                                sErrorMessage = "Please enter a valid email address";
-                            }
-                            break;
-                            
-                        case "url":
-                            // Basic URL validation regex
-                            const urlRegex = /^(http|https):\/\/[^ "]+$/;
-                            if (!urlRegex.test(vFieldValue)) {
-                                bTypeValid = false;
-                                sErrorMessage = "Please enter a valid URL (starting with http:// or https://)";
-                            }
-                            break;
-                    }
-                    
-                    if (!bTypeValid) {
-                        bValid = false;
-                        oValidationErrors[sFieldName] = sErrorMessage;
-                        
-                        // Set error state on the input control
-                        if (oControl && oControl.setValueState) {
-                            oControl.setValueState("Error");
-                            if (oControl.setValueStateText) {
-                                oControl.setValueStateText(sErrorMessage);
-                            }
-                        }
-                        
-                        console.log("Type validation failed:", sFieldName, sErrorMessage);
-                    }
-                }
-            });
-            
-            // Store validation errors in the view model
-            const oViewModel = this.getModel("viewModel");
-            if (oViewModel) {
-                oViewModel.setProperty("/validationErrors", oValidationErrors);
-            }
-            
-            console.log("Validation result:", bValid ? "Valid" : "Invalid", oValidationErrors);
-            
-            return bValid;
-        },
-        
-        
-        
-        /**
-         * Navigation handler
-         */
-        onNavBack: function() {
-            // Navigate back to list view
-            const sTableId = this.getModel("viewModel").getProperty("/tableId");
-            this.getRouter().navTo("entityList", {
-                table: sTableId
-            });
-        },
-
 
 
         /**
-         * Enhanced save press handler with fail-safe navigation
+         * Navigate after successful save
          */
-        onSavePress: function() {
-            const oViewModel = this.getModel("viewModel");
-            const sTableId = oViewModel.getProperty("/tableId");
-            const oEntityData = oViewModel.getProperty("/entity");
-            
-            console.log("Save pressed with entity data:", JSON.stringify(oEntityData, null, 2));
-            
-            // Reset any existing error states
-            this._resetFormErrorStates();
-            
-            // Set busy state
-            oViewModel.setProperty("/busy", true);
-            
-            // Get parent info from the view model
-            let oParentInfo = oViewModel.getProperty("/parentInfo");
-            
-            // If no parent info in view model, try backup or session storage
-            if (!oParentInfo && this._parentInfoBackup) {
-                console.log("Using parent info backup");
-                oParentInfo = this._parentInfoBackup;
-            }
-            
-            if (!oParentInfo) {
-                try {
-                    // Last attempt to get from session storage
-                    const sParentInfo = sessionStorage.getItem("parentEntityInfo");
-                    if (sParentInfo) {
-                        oParentInfo = JSON.parse(sParentInfo);
-                        console.log("Retrieved parent info from session storage:", JSON.stringify(oParentInfo, null, 2));
-                    }
-                } catch (e) {
-                    console.error("Error retrieving parent info from session storage:", e);
-                }
-            }
-            
-            console.log("Final parent info for saving:", oParentInfo ? JSON.stringify(oParentInfo) : "none");
-            
-            // Load metadata for validation
-            this.getTableMetadata(sTableId).then((oMetadata) => {
-                // Perform validation
-                if (!this._validateForm(oMetadata, oEntityData)) {
-                    this.showErrorMessage("Please correct the errors in the form");
-                    oViewModel.setProperty("/busy", false);
-                    return;
-                }
-                
-                // Create a copy of the data without read-only fields
-                const oDataToInsert = {};
-                
-                oMetadata.columns.forEach((oColumnMetadata) => {
-                    // Skip non-editable fields and primary key
-                    if ((oColumnMetadata.editable === false && 
-                        oColumnMetadata.name !== oMetadata.primaryKey) || 
-                        oColumnMetadata.name === oMetadata.primaryKey ||
-                        oColumnMetadata.name === 'created_at' ||
-                        oColumnMetadata.name === 'updated_at') {
-                        return;
-                    }
-                    
-                    // Add field to insert data
-                    oDataToInsert[oColumnMetadata.name] = oEntityData[oColumnMetadata.name];
-                });
-                
-                // If we have parent info, ensure foreign key is set
-                if (oParentInfo && oParentInfo.foreignKey && oParentInfo.parentId) {
-                    console.log(`Setting foreign key ${oParentInfo.foreignKey} = ${oParentInfo.parentId}`);
-                    oDataToInsert[oParentInfo.foreignKey] = oParentInfo.parentId;
-                }
-                
-                console.log("Data to insert:", JSON.stringify(oDataToInsert, null, 2));
-                
-                // Create entity
-                this.getSupabaseClient()
-                    .from(sTableId)
-                    .insert(oDataToInsert)
-                    .then(({ data, error }) => {
-                        oViewModel.setProperty("/busy", false);
-                        
-                        if (error) {
-                            console.error("Error creating entity:", error);
-                            this.showErrorMessage("Error creating entity: " + error.message);
-                            return;
-                        }
-                        
-                        const sTableName = oViewModel.getProperty("/tableName");
-                        this.showSuccessMessage(sTableName + " created successfully");
-                        
-                        // Try to clear session storage
-                        try {
-                            sessionStorage.removeItem("parentEntityInfo");
-                            console.log("Cleared parent info from session storage");
-                        } catch (e) {
-                            console.warn("Could not clear session storage:", e);
-                        }
-                        
-                        // NAVIGATION AFTER SAVE:
-                        this._navigateAfterSave(oParentInfo, sTableId);
-                    })
-                    .catch(error => {
-                        console.error("Error in Supabase query:", error);
-                        this.showErrorMessage("Error creating entity: " + error.message);
-                        oViewModel.setProperty("/busy", false);
-                    });
-            }).catch(error => {
-                console.error("Error getting table metadata:", error);
-                this.showErrorMessage("Error getting table metadata: " + error.message);
-                oViewModel.setProperty("/busy", false);
-            });
-        },
-
-        /**
-         * Dedicated method for navigation after save to centralize the logic
-         */
-        _navigateAfterSave: function(oParentInfo, sTableId) {
+        _navigateAfterSave: function(oParentInfo, aTableResult, oMetadata) {
             console.log("Navigating after save");
             
-            // If parent info exists, navigate back to parent detail
-            if (oParentInfo && oParentInfo.parentTable && oParentInfo.parentId) {
-                console.log("Navigating to parent entity:", oParentInfo.parentTable, oParentInfo.parentId);
-                
-                try {
-                    // Force a small delay to ensure proper transition
-                    setTimeout(() => {
-                        this.getRouter().navTo("entityDetail", {
-                            table: oParentInfo.parentTable,
-                            id: oParentInfo.parentId
-                        });
-                        console.log("Navigation to parent initiated");
-                    }, 100);
-                } catch (e) {
-                    console.error("Error during navigation to parent:", e);
-                    
-                    // Fallback navigation to list view
-                    try {
-                        this.getRouter().navTo("entityList", {
-                            table: sTableId
-                        });
-                        console.log("Fallback navigation to list view initiated");
-                    } catch (e2) {
-                        console.error("Error during fallback navigation:", e2);
-                    }
-                }
-            } else {
-                // No parent info, navigate to list view
-                console.log("No parent info, navigating to list view");
-                this.getRouter().navTo("entityList", {
-                    table: sTableId
-                });
-            }
-        },
- 
-        /**
-         * Enhanced cancel press handler with improved navigation
-         */
-        onCancelPress: function() {
-            console.log("Cancel pressed");
-            
-            const oViewModel = this.getModel("viewModel");
-            const sTableId = oViewModel.getProperty("/tableId");
-            
-            // Get parent info from view model
-            let oParentInfo = oViewModel.getProperty("/parentInfo");
-            
-            // If not in view model, try backup
-            if (!oParentInfo && this._parentInfoBackup) {
-                console.log("Using parent info backup for cancel");
-                oParentInfo = this._parentInfoBackup;
-            }
-            
-            if (!oParentInfo) {
-                try {
-                    // Last attempt to get from session storage
-                    const sParentInfo = sessionStorage.getItem("parentEntityInfo");
-                    if (sParentInfo) {
-                        oParentInfo = JSON.parse(sParentInfo);
-                        console.log("Retrieved parent info from session storage for cancel");
-                    }
-                } catch (e) {
-                    console.error("Error retrieving parent info from session storage:", e);
-                }
-            }
-            
-            // Try to clear session storage
+            // Clear session storage
             try {
                 sessionStorage.removeItem("parentEntityInfo");
-                console.log("Cleared parent info from session storage");
             } catch (e) {
                 console.warn("Could not clear session storage:", e);
             }
             
             // Navigate based on parent info
             if (oParentInfo && oParentInfo.parentTable && oParentInfo.parentId) {
-                console.log("Navigating to parent entity after cancel:", 
-                    oParentInfo.parentTable, oParentInfo.parentId);
+                // Navigate back to parent detail
+                console.log("Navigating to parent detail", oParentInfo.parentTable, oParentInfo.parentId);
+                this.getRouter().navTo("detail", {
+                    table: oParentInfo.parentTable,
+                    id: oParentInfo.parentId
+                });
+            } else {
+                // Navigate back to list view (changed from detail to list)
+                console.log("Navigating to list view", this._sTableName);
                 
+                // Use try-catch for navigation
                 try {
-                    // Force a small delay to ensure proper transition
-                    setTimeout(() => {
-                        this.getRouter().navTo("entityDetail", {
-                            table: oParentInfo.parentTable,
-                            id: oParentInfo.parentId
-                        });
-                        console.log("Navigation to parent initiated after cancel");
-                    }, 100);
-                } catch (e) {
-                    console.error("Error during navigation to parent after cancel:", e);
+                    // Adjust route name based on your manifest configuration
+                    const sListRoute = "list" || "entityList";  // Try common route names
                     
-                    // Fallback navigation to list view
-                    this.getRouter().navTo("entityList", {
-                        table: sTableId
-                    });
+                    this.getRouter().navTo(sListRoute, {
+                        table: this._sTableName
+                    }, true); // Use true to replace current history entry
+                } catch (navError) {
+                    console.error("Navigation to list failed:", navError);
+                    
+                    // Fallback: try alternative route names
+                    try {
+                        this.getRouter().navTo("entityList", {
+                            table: this._sTableName
+                        });
+                    } catch (fallbackError) {
+                        console.error("Fallback navigation also failed:", fallbackError);
+                        
+                        // Last resort: navigate to home
+                        this.getRouter().navTo("home");
+                    }
                 }
+            }
+        },
+
+        /**
+         * Cancel action handler
+         */
+        onCancelPress: function() {
+            const oViewModel = this.getModel("viewModel");
+            const oParentInfo = oViewModel.getProperty("/parentInfo");
+            
+            // Clear session storage
+            try {
+                sessionStorage.removeItem("parentEntityInfo");
+            } catch (e) {
+                console.warn("Could not clear session storage:", e);
+            }
+            
+            // Navigate based on parent info
+            if (oParentInfo && oParentInfo.parentTable && oParentInfo.parentId) {
+                // Navigate back to parent detail
+                this.getRouter().navTo("detail", {
+                    table: oParentInfo.parentTable,
+                    id: oParentInfo.parentId
+                });
             } else {
                 // Navigate back to list view
-                console.log("No parent info, navigating to list view after cancel");
-                this.getRouter().navTo("entityList", {
-                    table: sTableId
+                this.getRouter().navTo("list", {
+                    table: this._sTableName
                 });
             }
         },
 
+        /**
+         * Toggle navigation
+         */
+        onToggleNav: function() {
+            const oSplitApp = this.getOwnerComponent().getSplitApp();
+            if (oSplitApp) {
+                if (oSplitApp.isMasterShown()) {
+                    oSplitApp.hideMaster();
+                } else {
+                    oSplitApp.showMaster();
+                }
+            }
+        }
     });
 });

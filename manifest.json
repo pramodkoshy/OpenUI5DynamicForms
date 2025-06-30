@@ -69,13 +69,13 @@
                 }
             ],
             "js": [
-            {
-                "name": "com/supabase/easyui5/controller/EntityCreateForm.js"
-            },
-            {
-                "name": "com/supabase/easyui5/controller/EntityDetailForm.js"
-            }
-        ]
+                {
+                    "name": "com/supabase/easyui5/controller/EntityCreateForm.js"
+                },
+                {
+                    "name": "com/supabase/easyui5/controller/EntityDetailForm.js"
+                }
+            ]
         },
         "routing": {
             "config": {
@@ -109,6 +109,21 @@
                 {
                     "pattern": "entity/{table}/create",
                     "name": "entityCreate",
+                    "target": "entityCreate"
+                },
+                {
+                    "pattern": "list/{table}",
+                    "name": "list",
+                    "target": "entityList"
+                },
+                {
+                    "pattern": "detail/{table}/{id}",
+                    "name": "detail",
+                    "target": "entityDetail"
+                },
+                {
+                    "pattern": "create/{table}",
+                    "name": "create",
                     "target": "entityCreate"
                 }
             ],

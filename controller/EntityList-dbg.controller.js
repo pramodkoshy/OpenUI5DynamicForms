@@ -70,7 +70,46 @@ sap.ui.define([
                     setTimeout(this._forceColumnWidths.bind(this), 500);
                 }.bind(this)
             }, this);
+            
+            // Add resize handler for scroll position update
+            this._resizeHandler = this._onWindowResize.bind(this);
+            window.addEventListener("resize", this._resizeHandler);
 
+        },
+        
+        /**
+         * Cleanup on exit
+         */
+        onExit: function() {
+            // Remove resize handler
+            if (this._resizeHandler) {
+                window.removeEventListener("resize", this._resizeHandler);
+            }
+            
+            // Remove any scroll containers
+            jQuery(".horizontalScrollWrapper").remove();
+        },
+        
+        /**
+         * Handle window resize to update scroll position
+         * @private
+         */
+        _onWindowResize: function() {
+            // Debounce resize events
+            if (this._resizeTimer) {
+                clearTimeout(this._resizeTimer);
+            }
+            
+            this._resizeTimer = setTimeout(function() {
+                // Get current visible columns
+                const oViewModel = this.getModel("viewModel");
+                const aVisibleColumns = oViewModel.getProperty("/visibleColumns") || [];
+                
+                if (aVisibleColumns.length > 5) {
+                    // Recreate scroll container with new position
+                    this._createTopScrollContainer(aVisibleColumns.length * 6);
+                }
+            }.bind(this), 250);
         },
         
         /**
@@ -367,11 +406,8 @@ sap.ui.define([
         },
         
 
-        /**
-         * Configure table with fixed widths directly
-         * @param {Object} oMetadata The table metadata
-         * @private
-         */
+
+        // Updated _configureTable method for EntityList.controller.js
         _configureTable: function(oMetadata) {
             const oTable = this.getView().byId("entityTable");
             const oViewModel = this.getModel("viewModel");
@@ -395,65 +431,10 @@ sap.ui.define([
             const aAllColumns = oMetadata.columns.filter(col => col.visible);
             oViewModel.setProperty("/availableColumns", aAllColumns);
             
-            // Add a custom CSS style for fixed headers if not already present
-            if (!document.getElementById("fixedTableStyles")) {
-                var styleEl = document.createElement("style");
-                styleEl.id = "fixedTableStyles";
-                styleEl.innerHTML = `
-                    .sapMListTblHeader {
-                        position: sticky !important;
-                        top: 0 !important;
-                        z-index: 100 !important;
-                        background-color: #f7f7f7 !important;
-                    }
-                    
-                    .fixedWidthTable {
-                        overflow-x: auto !important;
-                    }
-                    
-                    .fixedWidthTable table {
-                        table-layout: fixed !important;
-                    }
-                    
-                    .sapMListTblCell {
-                        padding-left: 4px !important;
-                        padding-right: 4px !important;
-                    }
-                `;
-                document.head.appendChild(styleEl);
-            }
-            
-            // Add class to table parent for scrolling
-            setTimeout(function() {
-                var tableParent = oTable.$().parent();
-                if (tableParent.length) {
-                    tableParent.addClass("fixedWidthTable");
-                }
-            }, 100);
-            
             // Add columns based on metadata
             aVisibleColumns.forEach((oColumnMetadata, index) => {
                 // Calculate optimal column width
-                let sWidth = "8rem"; // Default
-                
-                switch (oColumnMetadata.type) {
-                    case "boolean":
-                        sWidth = "5rem";
-                        break;
-                    case "date":
-                        sWidth = "8rem";
-                        break;
-                    case "number":
-                        sWidth = "7rem";
-                        break;
-                    case "relation":
-                        sWidth = "10rem";
-                        break;
-                    default:
-                        if (index === 0) sWidth = "10rem";
-                        else if (index === 1) sWidth = "12rem";
-                        else sWidth = "9rem";
-                }
+                let sWidth = this._getOptimizedColumnWidth(oColumnMetadata.type, index, oColumnMetadata.name);
                 
                 // Create column
                 const oColumn = new sap.m.Column({
@@ -525,14 +506,79 @@ sap.ui.define([
                 oTemplate.addCell(oCell);
             });
             
+            // Unbind items first, then rebind with new template
+            oTable.unbindItems();
+            
             // Bind items
             oTable.bindItems({
                 path: "viewModel>/items",
                 template: oTemplate,
                 templateShareable: false
             });
+            
+            // Apply horizontal scrolling if needed
+            if (aVisibleColumns.length > 5) {
+                setTimeout(() => {
+                    this._createTopScrollContainer(aVisibleColumns.length * 6);
+                }, 300);
+            }
         },
-        
+
+        // Helper function to get optimized column width
+        _getOptimizedColumnWidth: function(sType, index, sName) {
+            // Set column width based on data type with optimized smaller widths
+            let sWidth;
+            
+            switch (sType) {
+                case "boolean":
+                    sWidth = "5rem";
+                    break;
+                case "date":
+                    sWidth = "8rem";
+                    break;
+                case "number":
+                case "integer":
+                    sWidth = "7rem";
+                    break;
+                case "email":
+                case "url":
+                    sWidth = "12rem";
+                    break;
+                case "relation":
+                    sWidth = "10rem";
+                    break;
+                default:
+                    // For the first columns, still give them reasonable space but reduced
+                    if (index === 0) {
+                        sWidth = "10rem"; // Primary ID column
+                    } else if (index === 1) {
+                        sWidth = "12rem"; // Name/title column
+                    } else if (index === 2) {
+                        sWidth = "12rem"; // Description column
+                    } else {
+                        sWidth = "9rem"; // Other columns
+                    }
+            }
+            
+            // Special handling for specific column names
+            if (sName) {
+                const lowerName = sName.toLowerCase();
+                if (lowerName.includes('id') && lowerName !== 'id') {
+                    sWidth = "6rem"; // IDs except primary ID
+                } else if (lowerName === 'id') {
+                    sWidth = "5rem"; // Primary ID if named simply 'id'
+                } else if (lowerName.includes('code') || lowerName.includes('status')) {
+                    sWidth = "6rem"; // Code or status fields
+                } else if (lowerName === 'entity_id') {
+                    sWidth = "6rem"; // Entity ID for polymorphic relations
+                } else if (lowerName === 'entity_type') {
+                    sWidth = "8rem"; // Entity type for polymorphic relations
+                }
+            }
+            
+            return sWidth;
+        },
+                
         /**
          * Helper method to populate a relation ComboBox with items
          * @param {sap.m.ComboBox} oComboBox The ComboBox control
@@ -623,9 +669,7 @@ sap.ui.define([
                 console.error(`Error getting metadata for relation ${sRelatedTable}:`, error);
             });
         },
-        /**
-         * Modified version of onColumnsButtonPress
-         */
+
         onColumnsButtonPress: function() {
             const oViewModel = this.getModel("viewModel");
             const aAvailableColumns = oViewModel.getProperty("/availableColumns");
@@ -633,15 +677,15 @@ sap.ui.define([
             
             // Create dialog for column selection
             if (!this._oColumnDialog) {
-                this._oColumnDialog = new Dialog({
+                this._oColumnDialog = new sap.m.Dialog({
                     title: "Select Columns",
                     contentWidth: "400px",
-                    content: new List({
+                    content: new sap.m.List({
                         mode: "MultiSelect",
                         includeItemInSelection: true,
                         items: {
                             path: "columns>/",
-                            template: new StandardListItem({
+                            template: new sap.m.StandardListItem({
                                 title: "{columns>label}",
                                 description: "{columns>name}",
                                 type: "Active",
@@ -654,17 +698,31 @@ sap.ui.define([
                             })
                         }
                     }),
-                    beginButton: new Button({
+                    beginButton: new sap.m.Button({
                         text: "Apply",
                         type: "Emphasized",
                         press: function() {
                             // Get selected columns
                             const oList = this._oColumnDialog.getContent()[0];
                             const aSelectedItems = oList.getSelectedItems();
+                            
+                            if (aSelectedItems.length === 0) {
+                                sap.m.MessageToast.show("Please select at least one column.");
+                                return;
+                            }
+                            
                             const aSelectedColumns = aSelectedItems.map(item => {
-                                const sPath = item.getBindingContext("columns").getPath();
-                                return this._oColumnDialog.getModel("columns").getProperty(sPath);
-                            });
+                                const oBindingContext = item.getBindingContext("columns");
+                                const sPath = oBindingContext.getPath();
+                                const oColumnData = this._oColumnDialog.getModel("columns").getProperty(sPath);
+                                
+                                // Get the full column metadata from available columns
+                                const oViewModel = this.getModel("viewModel");
+                                const aAvailableColumns = oViewModel.getProperty("/availableColumns");
+                                return aAvailableColumns.find(col => col.name === oColumnData.name);
+                            }).filter(col => col !== undefined);
+                            
+                            console.log("Selected columns:", aSelectedColumns.map(c => c.name));
                             
                             // Update visible columns
                             oViewModel.setProperty("/visibleColumns", aSelectedColumns);
@@ -672,17 +730,24 @@ sap.ui.define([
                             // Reconfigure table with selected columns
                             this._reconfigureTable(aSelectedColumns);
                             
+                            // Force table refresh to show data
+                            setTimeout(() => {
+                                const oTable = this.getView().byId("entityTable");
+                                const oBinding = oTable.getBinding("items");
+                                if (oBinding) {
+                                    oBinding.refresh(true);
+                                }
+                            }, 100);
+                            
                             // Close dialog
                             this._oColumnDialog.close();
                             
                             // Apply direct DOM manipulation for column widths
-                            // We do this multiple times to ensure it gets applied after rendering
-                            setTimeout(this._forceColumnWidths.bind(this), 100);
-                            setTimeout(this._forceColumnWidths.bind(this), 500);
-                            setTimeout(this._forceColumnWidths.bind(this), 1000);
+                            setTimeout(this._forceColumnWidths.bind(this), 200);
+                            setTimeout(this._forceColumnWidths.bind(this), 600);
                         }.bind(this)
                     }),
-                    endButton: new Button({
+                    endButton: new sap.m.Button({
                         text: "Cancel",
                         press: function() {
                             this._oColumnDialog.close();
@@ -704,7 +769,8 @@ sap.ui.define([
             });
             
             // Set model with column data
-            this._oColumnDialog.setModel(new JSONModel(aColumns), "columns");
+            // Fix: Use sap.ui.model.json.JSONModel instead of sap.m.JSONModel
+            this._oColumnDialog.setModel(new sap.ui.model.json.JSONModel(aColumns), "columns");
             
             // Open dialog
             this._oColumnDialog.open();
@@ -885,20 +951,14 @@ sap.ui.define([
             
             console.log("Total allocated width (rem):", iTotalAllocatedRem);
             
-            // Update the table template
-            const oBinding = oTable.getBinding("items");
-            if (oBinding) {
-                oBinding.getTemplate = function() {
-                    return oTemplate;
-                };
-                oTable.invalidate();
-            } else {
-                // Properly bind the table items if not already bound
-                oTable.bindItems({
-                    path: "viewModel>/items",
-                    template: oTemplate
-                });
-            }
+            // Unbind items first, then rebind with new template
+            oTable.unbindItems();
+            
+            // Bind the table items with the updated template
+            oTable.bindItems({
+                path: "viewModel>/items",
+                template: oTemplate
+            });
             
             // Apply horizontal scrolling right away with fixed values
             setTimeout(function() {
@@ -1123,26 +1183,23 @@ sap.ui.define([
                 oTemplate.addCell(oCell);
             });
             
-            // Update the table template
-            const oBinding = oTable.getBinding("items");
-            if (oBinding) {
-                oBinding.getTemplate = function() {
-                    return oTemplate;
-                };
-                oTable.invalidate();
-            } else {
-                // Properly bind the table items if not already bound
-                oTable.bindItems({
-                    path: "viewModel>/items",
-                    template: oTemplate
-                });
-            }
+            // Unbind items first, then rebind with new template
+            oTable.unbindItems();
+            
+            // Bind the table items with the updated template
+            oTable.bindItems({
+                path: "viewModel>/items",
+                template: oTemplate
+            });
             
             // Apply horizontal scrolling if needed
             if (aSelectedColumns.length > 5) {
                 setTimeout(function() {
                     this._createTopScrollContainer(aSelectedColumns.length * 6); // Reduced from 12 to 6
                 }.bind(this), 300);
+            } else {
+                // Remove scroll container if not needed
+                jQuery(".horizontalScrollWrapper").remove();
             }
         },
                         
@@ -1518,18 +1575,31 @@ sap.ui.define([
                 // Remove any existing containers
                 jQuery(".horizontalScrollWrapper").remove();
                 
+                // Determine if all rows are visible
+                const bScrollOnBottom = this._shouldShowScrollOnBottom(oTable, tableDom);
+                console.log("Scroll position:", bScrollOnBottom ? "bottom" : "top");
+                
                 // Create scroll container
                 var scrollDiv = document.createElement("div");
                 scrollDiv.className = "horizontalScrollWrapper";
                 scrollDiv.style.width = "100%";
                 scrollDiv.style.overflowX = "auto";
-                scrollDiv.style.position = "sticky";
-                scrollDiv.style.top = "0";
+                scrollDiv.style.position = bScrollOnBottom ? "fixed" : "sticky";
                 scrollDiv.style.zIndex = "100";
                 scrollDiv.style.height = "16px";
                 scrollDiv.style.background = "#f5f5f5";
                 scrollDiv.style.borderRadius = "4px";
                 scrollDiv.style.border = "1px solid #e5e5e5";
+                
+                if (bScrollOnBottom) {
+                    // Position at bottom of viewport
+                    scrollDiv.style.bottom = "60px"; // Above footer
+                    scrollDiv.style.left = "0";
+                    scrollDiv.style.right = "0";
+                } else {
+                    // Position at top (default)
+                    scrollDiv.style.top = "0";
+                }
                 
                 // Content div to create scrollable width
                 var remToPixel = parseInt(getComputedStyle(document.documentElement).fontSize) || 16;
@@ -1540,8 +1610,14 @@ sap.ui.define([
                 contentDiv.style.height = "1px";
                 scrollDiv.appendChild(contentDiv);
                 
-                // Insert before table
-                tableDom.parentNode.insertBefore(scrollDiv, tableDom);
+                // Insert scroll container
+                if (bScrollOnBottom) {
+                    // For bottom position, append to body
+                    document.body.appendChild(scrollDiv);
+                } else {
+                    // For top position, insert before table
+                    tableDom.parentNode.insertBefore(scrollDiv, tableDom);
+                }
                 
                 // Configure table for scrolling
                 var tableElement = oTable.$().find(".sapMListTbl");
@@ -1566,6 +1642,17 @@ sap.ui.define([
                     }
                 });
                 
+                // If on bottom, also sync table scroll to scrollbar
+                if (bScrollOnBottom) {
+                    // Find the table's scroll container
+                    const tableScrollContainer = jQuery(tableDom).find(".sapMListItems");
+                    if (tableScrollContainer.length) {
+                        tableScrollContainer.on("scroll", function() {
+                            scrollDiv.scrollLeft = this.scrollLeft;
+                        });
+                    }
+                }
+                
                 console.log("Scroll container created successfully");
             } catch (e) {
                 console.error("Error creating scroll container:", e);
@@ -1575,6 +1662,59 @@ sap.ui.define([
                 }.bind(this), 300);
             }
         },
+        
+        /**
+         * Determine if horizontal scroll should be shown at bottom
+         * @param {sap.m.Table} oTable The table control
+         * @param {HTMLElement} tableDom The table DOM element
+         * @returns {boolean} True if scroll should be on bottom
+         * @private
+         */
+        _shouldShowScrollOnBottom: function(oTable, tableDom) {
+            try {
+                // Get table items
+                const aItems = oTable.getItems();
+                const nTotalRows = aItems.length;
+                
+                if (nTotalRows === 0) {
+                    return false; // No rows, show at top
+                }
+                
+                // Get viewport height
+                const nViewportHeight = window.innerHeight;
+                
+                // Get table container bounds
+                const tableRect = tableDom.getBoundingClientRect();
+                const nTableTop = tableRect.top;
+                
+                // Get the height of each row (approximate)
+                const firstItem = aItems[0];
+                if (firstItem && firstItem.getDomRef()) {
+                    const rowHeight = firstItem.getDomRef().offsetHeight;
+                    const headerHeight = 50; // Approximate header height
+                    const footerHeight = 60; // Footer toolbar height
+                    
+                    // Calculate total table content height
+                    const nTotalTableHeight = headerHeight + (rowHeight * nTotalRows);
+                    
+                    // Calculate available space for table
+                    const nAvailableHeight = nViewportHeight - nTableTop - footerHeight;
+                    
+                    console.log(`Table visibility check: ${nTotalRows} rows, total height: ${nTotalTableHeight}px, available: ${nAvailableHeight}px`);
+                    
+                    // If all rows fit in viewport, show scroll at bottom
+                    return nTotalTableHeight <= nAvailableHeight;
+                }
+                
+                // Default to top if we can't determine
+                return false;
+                
+            } catch (e) {
+                console.error("Error determining scroll position:", e);
+                return false; // Default to top on error
+            }
+        },
+       
        /** 
          * Helper function to get optimized column width based on column type and index
          * @param {string} sType Column data type

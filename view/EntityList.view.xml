@@ -10,18 +10,7 @@
     displayBlock="true">
     
     <Page id="entityListPage" title="{viewModel>/tableName} List">
-        <customHeader>
-            <Toolbar>
-                <Button 
-                    id="navToggleButton" 
-                    icon="sap-icon://menu2" 
-                    press=".onToggleNav" />
-                <Title text="{viewModel>/tableName} List" level="H2" />
-                <ToolbarSpacer />
-                <Button icon="sap-icon://add" tooltip="Create New" press=".onCreatePress" />
-                <Button icon="sap-icon://refresh" tooltip="Refresh Data" press=".onRefreshPress" />
-            </Toolbar>
-        </customHeader>
+
         
         <content>
             <f:DynamicPage id="dynamicPageId" headerExpanded="false" toggleHeaderOnTitleClick="true">

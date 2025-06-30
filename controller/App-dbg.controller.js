@@ -100,8 +100,16 @@ sap.ui.define([
             const sRouteName = oEvent.getParameter("name");
             const oArguments = oEvent.getParameter("arguments");
             
-            // Rest of your route matched code
-            console.log("Route matched:", sRouteName, oArguments);
+            console.log("App controller - Route matched:", sRouteName, oArguments);
+            
+            // Ensure master is shown on desktop for better navigation
+            const oSplitApp = this.byId("app");
+            if (oSplitApp && !sap.ui.Device.system.phone) {
+                // For non-phone devices, ensure master is visible when navigating
+                if (sRouteName !== "home" && !oSplitApp.isMasterShown()) {
+                    oSplitApp.showMaster();
+                }
+            }
         },
         
         

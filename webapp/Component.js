@@ -71,12 +71,23 @@ sap.ui.define([
                 window.supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
                 
                 const tablesModel = new sap.ui.model.json.JSONModel({
-                    tables: [
-                        { id: "suppliers", title: "Suppliers", icon: "sap-icon://supplier" },
-                        { id: "products", title: "Products", icon: "sap-icon://product" },
+                    tables : [
+                        // Primary business entities - most important tables first
                         { id: "customers", title: "Customers", icon: "sap-icon://customer" },
+                        { id: "lead", title: "Leads", icon: "sap-icon://opportunity" },
+                        { id: "lead_status", title: "Lead Status", icon: "sap-icon://status-in-process" },
+                        { id: "contacts", title: "Contacts", icon: "sap-icon://contacts" },
+                        { id: "products", title: "Products", icon: "sap-icon://product" },
                         { id: "orders", title: "Orders", icon: "sap-icon://sales-order" },
-                        { id: "order_items", title: "Order Items", icon: "sap-icon://list" }
+                        { id: "order_items", title: "Order Items", icon: "sap-icon://list" },
+                        
+                        // Supporting business processes
+                        { id: "activities", title: "Activities", icon: "sap-icon://activity-items" },
+                        { id: "campaigns", title: "Campaigns", icon: "sap-icon://marketing-campaign" },
+                        
+                        // Structural/system tables
+                        { id: "entities", title: "Entities", icon: "sap-icon://database" },
+                        { id: "notes", title: "Notes", icon: "sap-icon://notes" }
                     ]
                 });
                 this.setModel(tablesModel, "tables");
@@ -253,97 +264,355 @@ sap.ui.define([
             }
             
             // Define default metadata for tables
+           
             const oDefaultMetadata = {
-                suppliers: {
-                    primaryKey: "supplier_id",
-                    titleField: "company_name",
-                    subtitleField: "contact_name",
+                // Base entity table for polymorphic relationships
+                entities: {
+                    primaryKey: "entity_id",
+                    titleField: "name",
+                    subtitleField: "entity_type",
                     columns: [
-                        { name: "supplier_id", label: "ID", type: "string", visible: true, editable: false, required: false },
-                        { name: "company_name", label: "Company", type: "string", visible: true, editable: true, required: true }, 
-                        { name: "contact_name", label: "Contact Name", type: "string", visible: true, editable: true, required: false },
-                        { name: "email", label: "Contact Email", type: "email", visible: true, editable: true, required: false },
-                        { name: "phone", label: "Phone", type: "string", visible: true, editable: true, required: false },
-                        { name: "address", label: "Address", type: "text", visible: true, editable: true, required: false },
-                        { name: "city", label: "City", type: "string", visible: true, editable: true, required: false },
-                        { name: "country", label: "Country", type: "string", visible: true, editable: true, required: false },
-                        { name: "created_at", label: "Created At", type: "date", visible: true, editable: false, required: false },
-                        { name: "updated_at", label: "Updated At", type: "date", visible: true, editable: false, required: false }
-                    ],
-                    relations: [
-                        { table: "products", foreignKey: "supplier_id" }
-                    ]
-                },
-                products: {
-                    primaryKey: "product_id",
-                    titleField: "product_name",
-                    subtitleField: "description",
-                    columns: [
-                        { name: "product_id", label: "ID", type: "string", visible: true, editable: false, required: false },
-                        { name: "product_name", label: "Name", type: "string", visible: true, editable: true, required: true },
+                        { name: "entity_id", label: "Entity ID", type: "string", visible: true, editable: false, required: false },
+                        { name: "entity_type", label: "Entity Type", type: "string", visible: true, editable: true, required: true },
+                        { name: "name", label: "Name", type: "string", visible: true, editable: true, required: true },
                         { name: "description", label: "Description", type: "text", visible: true, editable: true, required: false },
-                        { name: "unit_price", label: "Price", type: "number", visible: true, editable: true, required: true },
-                        { name: "category", label: "Category", type: "string", visible: true, editable: true, required: false },
-                        { name: "supplier_id", label: "Supplier", type: "relation", relation: "suppliers", visible: true, editable: true, required: true },
                         { name: "created_at", label: "Created At", type: "date", visible: true, editable: false, required: false },
                         { name: "updated_at", label: "Updated At", type: "date", visible: true, editable: false, required: false }
                     ],
                     relations: [
-                        { table: "order_items", foreignKey: "product_id" }
+                        { table: "customers", foreignKey: "entity_id", condition: { entity_type: "customer" } },
+                        { table: "products", foreignKey: "entity_id", condition: { entity_type: "product" } },
+                        { table: "lead", foreignKey: "entity_id", condition: { entity_type: "lead" } },
+                        { table: "campaigns", foreignKey: "entity_id", condition: { entity_type: "campaign" } },
+                        { table: "contacts", foreignKey: "entity_id", condition: { entity_type: "contact" } },
+                        { table: "activities", foreignKey: "entity_id", condition: { entity_type: "activity" } },
+                        { table: "notes", foreignKey: "entity_id" },
+                        { table: "files", foreignKey: "entity_id" },
+                        { table: "entity_tags", foreignKey: "entity_id" }
                     ]
                 },
+            
+                // Main business entities
                 customers: {
                     primaryKey: "customer_id",
                     titleField: "name",
                     subtitleField: "email",
                     columns: [
-                        { name: "customer_id", label: "ID", type: "string", visible: true, editable: false, required: false },
-                        { name: "name", label: "Name", type: "string", visible: true, editable: true, required: true },
-                        { name: "email", label: "Email", type: "email", visible: true, editable: true, required: true },
+                        { name: "customer_id", label: "Customer ID", type: "string", visible: true, editable: false, required: false },
+                        { name: "entity_id", label: "Entity ID", type: "string", visible: false, editable: false, required: false },
+                        { name: "name", label: "Customer Name", type: "string", visible: true, editable: true, required: true },
+                        { name: "email", label: "Email", type: "email", visible: true, editable: true, required: false },
                         { name: "phone", label: "Phone", type: "string", visible: true, editable: true, required: false },
                         { name: "address", label: "Address", type: "text", visible: true, editable: true, required: false },
                         { name: "city", label: "City", type: "string", visible: true, editable: true, required: false },
                         { name: "country", label: "Country", type: "string", visible: true, editable: true, required: false },
+                        { name: "customer_type", label: "Customer Type", type: "string", visible: true, editable: true, required: false },
                         { name: "created_at", label: "Created At", type: "date", visible: true, editable: false, required: false },
                         { name: "updated_at", label: "Updated At", type: "date", visible: true, editable: false, required: false }
                     ],
                     relations: [
-                        { table: "orders", foreignKey: "customer_id" }
+                        { table: "orders", foreignKey: "customer_id" },
+                        { table: "contacts", foreignKey: "customer_id" },
+                        { table: "lead", foreignKey: "customer_id" },
+                        { table: "activities", foreignKey: "customer_id" },
+                        { table: "entities", foreignKey: "entity_id", condition: { entity_type: "customer" } },
+                        { table: "notes", foreignKey: "entity_id", condition: { entity_type: "customer" } },
+                        { table: "files", foreignKey: "entity_id", condition: { entity_type: "customer" } },
+                        { table: "entity_tags", foreignKey: "entity_id", condition: { entity_type: "customer" } }
                     ]
                 },
+            
+                products: {
+                    primaryKey: "product_id",
+                    titleField: "product_name",
+                    subtitleField: "category",
+                    columns: [
+                        { name: "product_id", label: "Product ID", type: "string", visible: true, editable: false, required: false },
+                        { name: "entity_id", label: "Entity ID", type: "string", visible: false, editable: false, required: false },
+                        { name: "product_name", label: "Product Name", type: "string", visible: true, editable: true, required: true },
+                        { name: "description", label: "Description", type: "text", visible: true, editable: true, required: false },
+                        { name: "unit_price", label: "Unit Price", type: "number", visible: true, editable: true, required: false },
+                        { name: "category", label: "Category", type: "string", visible: true, editable: true, required: false },
+                        { name: "features", label: "Features", type: "text", visible: true, editable: true, required: false },
+                        { name: "stock_level", label: "Stock Level", type: "number", visible: true, editable: true, required: false },
+                        { name: "created_at", label: "Created At", type: "date", visible: true, editable: false, required: false },
+                        { name: "updated_at", label: "Updated At", type: "date", visible: true, editable: false, required: false }
+                    ],
+                    relations: [
+                        { table: "order_items", foreignKey: "product_id" },
+                        { table: "campaigns", foreignKey: "product_id" },
+                        { table: "entities", foreignKey: "entity_id", condition: { entity_type: "product" } },
+                        { table: "notes", foreignKey: "entity_id", condition: { entity_type: "product" } },
+                        { table: "files", foreignKey: "entity_id", condition: { entity_type: "product" } },
+                        { table: "entity_tags", foreignKey: "entity_id", condition: { entity_type: "product" } }
+                    ]
+                },
+            
                 orders: {
                     primaryKey: "order_id",
-                    titleField: "id",
+                    titleField: "order_id",
                     subtitleField: "status",
                     columns: [
-                        { name: "order_id", label: "ID", type: "string", visible: true, editable: false, required: false },
+                        { name: "order_id", label: "Order ID", type: "string", visible: true, editable: false, required: false },
                         { name: "customer_id", label: "Customer", type: "relation", relation: "customers", visible: true, editable: true, required: true },
                         { name: "order_date", label: "Order Date", type: "date", visible: true, editable: true, required: true },
                         { name: "total_amount", label: "Total Amount", type: "number", visible: true, editable: true, required: true },
+                        { name: "status", label: "Status", type: "string", visible: true, editable: true, required: true },
+                        { name: "payment_method", label: "Payment Method", type: "string", visible: true, editable: true, required: false },
                         { name: "created_at", label: "Created At", type: "date", visible: true, editable: false, required: false },
                         { name: "updated_at", label: "Updated At", type: "date", visible: true, editable: false, required: false }
                     ],
                     relations: [
-                        { table: "order_items", foreignKey: "order_id" }
+                        { table: "order_items", foreignKey: "order_id" },
+                        { table: "customers", foreignKey: "customer_id" }
                     ]
                 },
+            
                 order_items: {
                     primaryKey: "order_item_id",
-                    titleField: "id",
+                    titleField: "order_item_id",
                     subtitleField: "quantity",
                     columns: [
-                        { name: "order_item_id", label: "ID", type: "string", visible: true, editable: false, required: false },
+                        { name: "order_item_id", label: "Item ID", type: "string", visible: true, editable: false, required: false },
                         { name: "order_id", label: "Order", type: "relation", relation: "orders", visible: true, editable: true, required: true },
                         { name: "product_id", label: "Product", type: "relation", relation: "products", visible: true, editable: true, required: true },
                         { name: "quantity", label: "Quantity", type: "number", visible: true, editable: true, required: true },
                         { name: "unit_price", label: "Unit Price", type: "number", visible: true, editable: true, required: true },
+                        { name: "discount", label: "Discount %", type: "number", visible: true, editable: true, required: false },
                         { name: "created_at", label: "Created At", type: "date", visible: true, editable: false, required: false },
                         { name: "updated_at", label: "Updated At", type: "date", visible: true, editable: false, required: false }
                     ],
-                    relations: []
-                }
-            };
+                    relations: [
+                        { table: "orders", foreignKey: "order_id" },
+                        { table: "products", foreignKey: "product_id" }
+                    ]
+                },
             
+                lead: {
+                    primaryKey: "lead_id",
+                    titleField: "company_name",
+                    subtitleField: "contact_name",
+                    columns: [
+                        { name: "lead_id", label: "Lead ID", type: "string", visible: true, editable: false, required: false },
+                        { name: "entity_id", label: "Entity ID", type: "string", visible: false, editable: false, required: false },
+                        { name: "company_name", label: "Company Name", type: "string", visible: true, editable: true, required: true },
+                        { name: "contact_name", label: "Contact Name", type: "string", visible: true, editable: true, required: true },
+                        { name: "email", label: "Email", type: "email", visible: true, editable: true, required: true },
+                        { name: "phone", label: "Phone", type: "string", visible: true, editable: true, required: false },
+                        { name: "status_id", label: "Status", type: "relation", relation: "lead_status", visible: true, editable: true, required: true },
+                        { name: "source", label: "Lead Source", type: "string", visible: true, editable: true, required: false },
+                        { name: "customer_id", label: "Converted Customer", type: "relation", relation: "customers", visible: true, editable: true, required: false },
+                        { name: "created_at", label: "Created At", type: "date", visible: true, editable: false, required: false },
+                        { name: "updated_at", label: "Updated At", type: "date", visible: true, editable: false, required: false }
+                    ],
+                    relations: [
+                        { table: "activities", foreignKey: "lead_id" },
+                        { table: "customers", foreignKey: "customer_id" },
+                        { table: "lead_status", foreignKey: "status_id" },
+                        { table: "entities", foreignKey: "entity_id", condition: { entity_type: "lead" } },
+                        { table: "notes", foreignKey: "entity_id", condition: { entity_type: "lead" } },
+                        { table: "files", foreignKey: "entity_id", condition: { entity_type: "lead" } },
+                        { table: "entity_tags", foreignKey: "entity_id", condition: { entity_type: "lead" } }
+                    ]
+                },
+            
+                lead_status: {
+                    primaryKey: "status_id",
+                    titleField: "label",
+                    subtitleField: "description",
+                    columns: [
+                        { name: "status_id", label: "Status ID", type: "string", visible: true, editable: false, required: false },
+                        { name: "label", label: "Status Label", type: "string", visible: true, editable: true, required: true },
+                        { name: "description", label: "Description", type: "text", visible: true, editable: true, required: false },
+                        { name: "color", label: "Color", type: "string", visible: true, editable: true, required: false },
+                        { name: "position", label: "Position", type: "number", visible: true, editable: true, required: false }
+                    ],
+                    relations: [
+                        { table: "lead", foreignKey: "status_id" }
+                    ]
+                },
+            
+                contacts: {
+                    primaryKey: "contact_id",
+                    titleField: "name",
+                    subtitleField: "title",
+                    columns: [
+                        { name: "contact_id", label: "Contact ID", type: "string", visible: true, editable: false, required: false },
+                        { name: "customer_id", label: "Customer", type: "relation", relation: "customers", visible: true, editable: true, required: true },
+                        { name: "entity_id", label: "Entity ID", type: "string", visible: false, editable: false, required: false },
+                        { name: "name", label: "Contact Name", type: "string", visible: true, editable: true, required: true },
+                        { name: "title", label: "Job Title", type: "string", visible: true, editable: true, required: false },
+                        { name: "email", label: "Email", type: "email", visible: true, editable: true, required: true },
+                        { name: "phone", label: "Phone", type: "string", visible: true, editable: true, required: false },
+                        { name: "is_primary", label: "Primary Contact", type: "boolean", visible: true, editable: true, required: false },
+                        { name: "created_at", label: "Created At", type: "date", visible: true, editable: false, required: false },
+                        { name: "updated_at", label: "Updated At", type: "date", visible: true, editable: false, required: false }
+                    ],
+                    relations: [
+                        { table: "activities", foreignKey: "contact_id" },
+                        { table: "customers", foreignKey: "customer_id" },
+                        { table: "entities", foreignKey: "entity_id", condition: { entity_type: "contact" } },
+                        { table: "notes", foreignKey: "entity_id", condition: { entity_type: "contact" } },
+                        { table: "files", foreignKey: "entity_id", condition: { entity_type: "contact" } },
+                        { table: "entity_tags", foreignKey: "entity_id", condition: { entity_type: "contact" } }
+                    ]
+                },
+            
+                activities: {
+                    primaryKey: "activity_id",
+                    titleField: "subject",
+                    subtitleField: "type",
+                    columns: [
+                        { name: "activity_id", label: "Activity ID", type: "string", visible: true, editable: false, required: false },
+                        { name: "entity_id", label: "Entity ID", type: "string", visible: false, editable: false, required: false },
+                        { name: "type", label: "Activity Type", type: "string", visible: true, editable: true, required: true },
+                        { name: "subject", label: "Subject", type: "string", visible: true, editable: true, required: true },
+                        { name: "description", label: "Description", type: "text", visible: true, editable: true, required: false },
+                        { name: "customer_id", label: "Customer", type: "relation", relation: "customers", visible: true, editable: true, required: false },
+                        { name: "contact_id", label: "Contact", type: "relation", relation: "contacts", visible: true, editable: true, required: false },
+                        { name: "lead_id", label: "Lead", type: "relation", relation: "lead", visible: true, editable: true, required: false },
+                        { name: "due_date", label: "Due Date", type: "date", visible: true, editable: true, required: false },
+                        { name: "status", label: "Status", type: "string", visible: true, editable: true, required: true },
+                        { name: "created_at", label: "Created At", type: "date", visible: true, editable: false, required: false },
+                        { name: "updated_at", label: "Updated At", type: "date", visible: true, editable: false, required: false }
+                    ],
+                    relations: [
+                        { table: "customers", foreignKey: "customer_id" },
+                        { table: "contacts", foreignKey: "contact_id" },
+                        { table: "lead", foreignKey: "lead_id" },
+                        { table: "entities", foreignKey: "entity_id", condition: { entity_type: "activity" } },
+                        { table: "notes", foreignKey: "entity_id", condition: { entity_type: "activity" } },
+                        { table: "files", foreignKey: "entity_id", condition: { entity_type: "activity" } }
+                    ]
+                },
+            
+                campaigns: {
+                    primaryKey: "campaign_id",
+                    titleField: "name",
+                    subtitleField: "status",
+                    columns: [
+                        { name: "campaign_id", label: "Campaign ID", type: "string", visible: true, editable: false, required: false },
+                        { name: "entity_id", label: "Entity ID", type: "string", visible: false, editable: false, required: false },
+                        { name: "name", label: "Campaign Name", type: "string", visible: true, editable: true, required: true },
+                        { name: "description", label: "Description", type: "text", visible: true, editable: true, required: false },
+                        { name: "product_id", label: "Product", type: "relation", relation: "products", visible: true, editable: true, required: false },
+                        { name: "start_date", label: "Start Date", type: "date", visible: true, editable: true, required: true },
+                        { name: "end_date", label: "End Date", type: "date", visible: true, editable: true, required: false },
+                        { name: "budget", label: "Budget", type: "number", visible: true, editable: true, required: false },
+                        { name: "status", label: "Status", type: "string", visible: true, editable: true, required: true },
+                        { name: "target_audience", label: "Target Audience", type: "text", visible: true, editable: true, required: false },
+                        { name: "created_at", label: "Created At", type: "date", visible: true, editable: false, required: false },
+                        { name: "updated_at", label: "Updated At", type: "date", visible: true, editable: false, required: false }
+                    ],
+                    relations: [
+                        { table: "products", foreignKey: "product_id" },
+                        { table: "entities", foreignKey: "entity_id", condition: { entity_type: "campaign" } },
+                        { table: "notes", foreignKey: "entity_id", condition: { entity_type: "campaign" } },
+                        { table: "files", foreignKey: "entity_id", condition: { entity_type: "campaign" } },
+                        { table: "entity_tags", foreignKey: "entity_id", condition: { entity_type: "campaign" } }
+                    ]
+                },
+            
+                // Polymorphic support tables
+                notes: {
+                    primaryKey: "note_id",
+                    titleField: "title",
+                    subtitleField: "entity_type",
+                    columns: [
+                        { name: "note_id", label: "Note ID", type: "string", visible: true, editable: false, required: false },
+                        { name: "entity_id", label: "Entity ID", type: "string", visible: true, editable: true, required: true },
+                        { name: "entity_type", label: "Entity Type", type: "string", visible: true, editable: true, required: true },
+                        { name: "title", label: "Note Title", type: "string", visible: true, editable: true, required: true },
+                        { name: "note", label: "Note Content", type: "text", visible: true, editable: true, required: true },
+                        { name: "category", label: "Category", type: "string", visible: true, editable: true, required: false },
+                        { name: "is_private", label: "Private", type: "boolean", visible: true, editable: true, required: false },
+                        { name: "created_by", label: "Created By", type: "string", visible: true, editable: false, required: false },
+                        { name: "created_at", label: "Created At", type: "date", visible: true, editable: false, required: false },
+                        { name: "updated_at", label: "Updated At", type: "date", visible: true, editable: false, required: false }
+                    ],
+                    relations: [
+                        { table: "entities", foreignKey: "entity_id" },
+                        { table: "customers", foreignKey: "entity_id", condition: { entity_type: "customer" } },
+                        { table: "products", foreignKey: "entity_id", condition: { entity_type: "product" } },
+                        { table: "lead", foreignKey: "entity_id", condition: { entity_type: "lead" } },
+                        { table: "campaigns", foreignKey: "entity_id", condition: { entity_type: "campaign" } },
+                        { table: "contacts", foreignKey: "entity_id", condition: { entity_type: "contact" } },
+                        { table: "activities", foreignKey: "entity_id", condition: { entity_type: "activity" } }
+                    ]
+                },
+            
+                files: {
+                    primaryKey: "file_id",
+                    titleField: "file_name",
+                    subtitleField: "file_type",
+                    columns: [
+                        { name: "file_id", label: "File ID", type: "string", visible: true, editable: false, required: false },
+                        { name: "entity_id", label: "Entity ID", type: "string", visible: true, editable: true, required: true },
+                        { name: "entity_type", label: "Entity Type", type: "string", visible: true, editable: true, required: true },
+                        { name: "file_name", label: "File Name", type: "string", visible: true, editable: true, required: true },
+                        { name: "original_name", label: "Original Name", type: "string", visible: true, editable: false, required: true },
+                        { name: "file_type", label: "File Type", type: "string", visible: true, editable: false, required: true },
+                        { name: "file_size", label: "File Size (KB)", type: "number", visible: true, editable: false, required: false },
+                        { name: "mime_type", label: "MIME Type", type: "string", visible: true, editable: false, required: false },
+                        { name: "storage_path", label: "Storage Path", type: "string", visible: false, editable: false, required: true },
+                        { name: "public_url", label: "Public URL", type: "url", visible: true, editable: false, required: false },
+                        { name: "description", label: "Description", type: "text", visible: true, editable: true, required: false },
+                        { name: "category", label: "Category", type: "string", visible: true, editable: true, required: false },
+                        { name: "is_private", label: "Private", type: "boolean", visible: true, editable: true, required: false },
+                        { name: "uploaded_by", label: "Uploaded By", type: "string", visible: true, editable: false, required: false },
+                        { name: "created_at", label: "Uploaded At", type: "date", visible: true, editable: false, required: false },
+                        { name: "updated_at", label: "Updated At", type: "date", visible: true, editable: false, required: false }
+                    ],
+                    relations: [
+                        { table: "entities", foreignKey: "entity_id" },
+                        { table: "customers", foreignKey: "entity_id", condition: { entity_type: "customer" } },
+                        { table: "products", foreignKey: "entity_id", condition: { entity_type: "product" } },
+                        { table: "lead", foreignKey: "entity_id", condition: { entity_type: "lead" } },
+                        { table: "campaigns", foreignKey: "entity_id", condition: { entity_type: "campaign" } },
+                        { table: "contacts", foreignKey: "entity_id", condition: { entity_type: "contact" } },
+                        { table: "activities", foreignKey: "entity_id", condition: { entity_type: "activity" } }
+                    ]
+                },
+            
+                tags: {
+                    primaryKey: "tag_id",
+                    titleField: "name",
+                    subtitleField: "category",
+                    columns: [
+                        { name: "tag_id", label: "Tag ID", type: "string", visible: true, editable: false, required: false },
+                        { name: "name", label: "Tag Name", type: "string", visible: true, editable: true, required: true },
+                        { name: "category", label: "Category", type: "string", visible: true, editable: true, required: false },
+                        { name: "color", label: "Color", type: "string", visible: true, editable: true, required: false },
+                        { name: "created_at", label: "Created At", type: "date", visible: true, editable: false, required: false },
+                        { name: "updated_at", label: "Updated At", type: "date", visible: true, editable: false, required: false }
+                    ],
+                    relations: [
+                        { table: "entity_tags", foreignKey: "tag_id" }
+                    ]
+                },
+            
+                entity_tags: {
+                    primaryKey: "entity_tag_id",
+                    titleField: "entity_tag_id",
+                    subtitleField: "entity_type",
+                    columns: [
+                        { name: "entity_tag_id", label: "ID", type: "string", visible: true, editable: false, required: false },
+                        { name: "entity_id", label: "Entity", type: "relation", relation: "entities", visible: true, editable: true, required: true },
+                        { name: "entity_type", label: "Entity Type", type: "string", visible: true, editable: true, required: true },
+                        { name: "tag_id", label: "Tag", type: "relation", relation: "tags", visible: true, editable: true, required: true },
+                        { name: "created_at", label: "Created At", type: "date", visible: true, editable: false, required: false }
+                    ],
+                    relations: [
+                        { table: "entities", foreignKey: "entity_id" },
+                        { table: "tags", foreignKey: "tag_id" },
+                        { table: "customers", foreignKey: "entity_id", condition: { entity_type: "customer" } },
+                        { table: "products", foreignKey: "entity_id", condition: { entity_type: "product" } },
+                        { table: "lead", foreignKey: "entity_id", condition: { entity_type: "lead" } },
+                        { table: "campaigns", foreignKey: "entity_id", condition: { entity_type: "campaign" } },
+                        { table: "contacts", foreignKey: "entity_id", condition: { entity_type: "contact" } }
+                    ]
+                }
+            };            
             // Check if we have default metadata
             if (oDefaultMetadata[sTableId]) {
                 // Store in cache

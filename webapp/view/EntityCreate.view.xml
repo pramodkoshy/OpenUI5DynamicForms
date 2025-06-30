@@ -2,14 +2,14 @@
     controllerName="com.supabase.easyui5.controller.EntityCreate"
     xmlns:mvc="sap.ui.core.mvc"
     xmlns="sap.m"
-    xmlns:layout="sap.ui.layout"
+    xmlns:l="sap.ui.layout"
     xmlns:form="sap.ui.layout.form"
     xmlns:core="sap.ui.core"
     xmlns:f="sap.f"
     displayBlock="true"
     id="entityCreateView">
     
-    <Page id="entityCreatePage" title="Create New {viewModel>/tableName}" showHeader="true">
+    <Page id="entityCreatePage" title="Create New {viewModel>/tableName}" showHeader="true" busy="{viewModel>/busy}" busyIndicatorDelay="0">
         <customHeader>
             <Toolbar>
                 <Button 
@@ -22,16 +22,17 @@
         </customHeader>
         
         <content>
-            <f:DynamicPage showFooter="true">
-                <f:title>
-                    <f:DynamicPageTitle>
-                        <f:heading>
-                            <Title text="Create New {viewModel>/tableName}" />
-                        </f:heading>
-                    </f:DynamicPageTitle>
-                </f:title>
-                
+            <f:DynamicPage showFooter="true" headerExpanded="false">
                 <f:content>
+                    <VBox class="sapUiMediumMargin">
+                        <MessageStrip
+                            text="Creating new {viewModel>/tableName}"
+                            type="Information"
+                            showIcon="true"
+                            class="sapUiSmallMarginBottom" />
+                        
+                        <Text text="Debug: Table ID = {viewModel>/tableId}" class="sapUiSmallMarginBottom" />
+                        
                     <form:Form 
     id="entityCreateForm"
     editable="true">
@@ -61,6 +62,7 @@
         </form:FormContainer>
     </form:formContainers>
 </form:Form>
+                    </VBox>
                 </f:content>
                 
                 <f:footer>
